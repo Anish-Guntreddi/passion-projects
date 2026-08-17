@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+# Pin the image tag to what deploy/local-cluster/setup-cluster.sh builds
+# and loads directly into the kind node via `kind load docker-image`. Kind
+# never pulls from a registry for this tag, so imagePullPolicy: IfNotPresent
+# (set in base/deployment.yaml) is what makes the locally-loaded image get
+# used instead of triggering a (failing) remote pull.
+images:
+  - name: releaseguard/demo-service
+    newTag: local

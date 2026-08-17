@@ -1,0 +1,159 @@
+# ReleaseGuard CI -- Phase 0.
+#
+# This workflow lives at projects/08-releaseguard/.github/workflows/ci.yml
+# within the passion-projects monorepo. GitHub Actions only discovers
+# workflows under the *repository root* .github/workflows/, so until this
+# project is split into its own repository (see 00-PORTFOLIO-INDEX.md:
+# "Each project gets its own repo when built"), the orchestrator needs to
+# either copy/symlink this file into the monorepo's root .github/workflows/
+# with the path filters below, or reference it via a reusable-workflow call.
+# The `paths:` filters already scope it to this project so that copy is a
+# no-op change in behavior.
+#
+# Two jobs, in order:
+#   1. test  -- go vet + go test (race, coverage) against the demo-service
+#      module. Nothing else runs if this fails.
+#   2. build-and-push -- builds the demo-service image with git-SHA
+#      provenance baked in via --build-arg/-ldflags, scans it for known
+#      OS/library vulnerabilities with Trivy (FR1: "image vulnerability/
+#      dependency scan" -- a CRITICAL/HIGH finding fails the job before
+#      anything is pushed), pushes it to GHCR using the automatic
+#      GITHUB_TOKEN (no manually-configured secret required), and records
+#      the registry-assigned content digest in the job summary. The
+#      sha-<short-sha> tag plus that digest together are what makes the
+#      image reference immutable -- Phase 0's exit criterion. Full
+#      supply-chain work (SBOM generation, signing, RBAC review) is
+#      Phase 8 per the roadmap; this job only adds the scan gate FR1
+#      requires up front.
+
+name: releaseguard-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "projects/08-releaseguard/**"
+      - "!projects/08-releaseguard/docs/**"
+  pull_request:
+    paths:
+      - "projects/08-releaseguard/**"
+      - "!projects/08-releaseguard/docs/**"
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: projects/08-releaseguard
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test demo-service
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: projects/08-releaseguard/demo-service/go.sum
+
+      - name: go vet
+        working-directory: projects/08-releaseguard/demo-service
+        run: go vet ./...
+
+      - name: go test (race + coverage)
+        working-directory: projects/08-releaseguard/demo-service
+        run: go test ./... -race -cover
+
+  build-and-push:
+    name: Build, scan and push immutable image
+    needs: test
+    runs-on: ubuntu-latest
+    # Only push on main; PRs still build and scan (to catch Dockerfile
+    # breakage and new vulnerabilities before merge) but never publish,
+    # since a PR image isn't a release candidate.
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.summary.outputs.digest }}
+      image_ref: ${{ steps.summary.outputs.image_ref }}
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/releaseguard-demo-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image metadata
+        id: meta
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          echo "build_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # load: true (rather than push here) makes the built image available
+      # to the local Docker daemon so Trivy can scan the exact bytes that
+      # would otherwise be pushed, and so the scan gate runs strictly
+      # before anything reaches the registry.
+      - name: Build image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: projects/08-releaseguard/demo-service
+          push: false
+          load: true
+          tags: |
+            ${{ env.IMAGE }}:sha-${{ steps.meta.outputs.sha_short }}
+          build-args: |
+            VERSION=sha-${{ steps.meta.outputs.sha_short }}
+            GIT_COMMIT=${{ github.sha }}
+            BUILD_TIME=${{ steps.meta.outputs.build_time }}
+
+      # FR1: "image vulnerability/dependency scan" as a CI gate. Fails the
+      # job (blocking the push step below) on any fixable CRITICAL/HIGH
+      # finding in the OS packages or Go module dependencies baked into
+      # the image. ignore-unfixed avoids failing the build on CVEs with no
+      # available fix yet, which would otherwise make this gate
+      # un-satisfiable through no fault of this repo's own dependencies.
+      - name: Scan image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:sha-${{ steps.meta.outputs.sha_short }}
+          format: table
+          exit-code: "1"
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+
+      - name: Push image
+        if: github.event_name == 'push'
+        run: docker push "${{ env.IMAGE }}:sha-${{ steps.meta.outputs.sha_short }}"
+
+      - name: Record immutable image reference
+        id: summary
+        if: github.event_name == 'push'
+        run: |
+          DIGEST="$(docker inspect "${{ env.IMAGE }}:sha-${{ steps.meta.outputs.sha_short }}" --format '{{(index .RepoDigests 0)}}' | sed 's/^.*@//')"
+          IMAGE_REF="${{ env.IMAGE }}@${DIGEST}"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+          {
+            echo "### ReleaseGuard demo-service image"
+            echo ""
+            echo "- Tag: \`sha-${{ steps.meta.outputs.sha_short }}\`"
+            echo "- Digest: \`$DIGEST\`"
+            echo "- Immutable reference: \`$IMAGE_REF\`"
+            echo "- Vulnerability scan: Trivy, CRITICAL/HIGH fixable findings gated the build (see the 'Scan image for vulnerabilities' step)"
+          } >> "$GITHUB_STEP_SUMMARY"

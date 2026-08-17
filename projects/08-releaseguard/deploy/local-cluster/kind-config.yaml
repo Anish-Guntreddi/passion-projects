@@ -1,0 +1,12 @@
+# kind cluster config for local ReleaseGuard development.
+#
+# A pinned node image keeps "fresh clone can deploy locally" (Phase 1
+# exit criterion) reproducible across machines and time: kind's own
+# default node image changes with kind's release cadence, so leaving this
+# unset would mean two developers running the same setup script weeks
+# apart could land on different Kubernetes versions without realizing it.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.29.2
