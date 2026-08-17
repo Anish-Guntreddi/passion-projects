@@ -1,0 +1,6 @@
+# Project-local ignores (in addition to the portfolio root .gitignore).
+# Runtime output of example/CLI runs -- not source, not committed.
+artifacts/
+runs/
+# requirements-lock.txt IS committed (reproducibility), intentionally not
+# listed here.

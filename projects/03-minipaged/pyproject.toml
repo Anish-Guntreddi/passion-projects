@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minipaged"
+version = "0.1.0"
+description = "Educational LLM serving runtime: paged KV cache + continuous batching (portfolio project 03)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "Anish Guntreddi" }]
+
+# Phases 0-1 are pure-Python domain simulation: no torch/numpy/typer
+# dependency yet -- there is no CLI or model adapter until later phases.
+# FR1 (a real HF/PyTorch model adapter) is Phase 5 -- see
+# docs/decisions/0001-simulation-first-architecture.md.
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "hypothesis>=6.100",
+    "ruff>=0.6",
+    "pyright>=1.1.380",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "gpu: test requires a CUDA device (skipped automatically when unavailable)",
+    "model: test requires a real model checkpoint (Phase 5+)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+# E501: line length handled by the formatter, not the linter.
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["minipaged"]
+
+[tool.pyright]
+include = ["src", "tests"]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportMissingImports = true
