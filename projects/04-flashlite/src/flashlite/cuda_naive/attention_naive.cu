@@ -1,5 +1,5 @@
 #include "attention_naive.cuh"
-#include "error_check.cuh"
+#include "../cuda_common/error_check.cuh"
 
 #include <cfloat>
 #include <cmath>

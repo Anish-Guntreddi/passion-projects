@@ -1,44 +1,26 @@
 // pybind11 / torch.utils.cpp_extension bindings for the V1 naive attention
 // kernel (ADR 0005: CUDA-extension <-> Python integration route).
 //
-// This is the ONLY place that validates a torch::Tensor's shape/dtype/
-// layout before any kernel launches -- the kernels themselves
-// (attention_naive.cu) assume valid input, per the same separation of
-// concerns KernelForge uses (launch_validate.hpp validates before kernel
-// launch, kernels themselves stay simple). TORCH_CHECK failures become
-// Python RuntimeError with the exact message below (spec: "unsupported
-// shapes must fail clearly").
+// Shape/dtype/layout validation (before any kernel launches) is shared with
+// every other variant's bindings via cuda_common/shape_validate.hpp (moved
+// out of this file in Phase 3, when cuda_tiled/bindings.cpp needed the
+// identical contract) -- the kernels themselves (attention_naive.cu) assume
+// valid input, per the same separation of concerns KernelForge uses
+// (launch_validate.hpp validates before kernel launch, kernels themselves
+// stay simple). TORCH_CHECK failures become Python RuntimeError with the
+// exact message documented there (spec: "unsupported shapes must fail
+// clearly").
 #include <torch/extension.h>
 
 #include <ATen/cuda/CUDAContext.h>
 
 #include "attention_naive.cuh"
+#include "../cuda_common/shape_validate.hpp"
 
 namespace {
 
 torch::Tensor attention_naive_forward(torch::Tensor q, torch::Tensor k, torch::Tensor v, bool causal) {
-  TORCH_CHECK(q.is_cuda() && k.is_cuda() && v.is_cuda(),
-              "flashlite naive attention: q, k, v must be CUDA tensors (got devices ", q.device(), ", ",
-              k.device(), ", ", v.device(), ")");
-  TORCH_CHECK(q.scalar_type() == torch::kFloat32 && k.scalar_type() == torch::kFloat32 &&
-                  v.scalar_type() == torch::kFloat32,
-              "flashlite naive attention: q, k, v must be float32 (ADR 0004: FP32 first); got q=",
-              q.scalar_type(), " k=", k.scalar_type(), " v=", v.scalar_type());
-  TORCH_CHECK(q.dim() == 4 && k.dim() == 4 && v.dim() == 4,
-              "flashlite naive attention: q, k, v must be 4-D [batch, heads, seq_len, head_dim]; got "
-              "q.dim()=",
-              q.dim(), " k.dim()=", k.dim(), " v.dim()=", v.dim());
-  TORCH_CHECK(q.sizes() == k.sizes() && k.sizes() == v.sizes(),
-              "flashlite naive attention: q, k, v must share one shape [B, H, S, D] (self-attention "
-              "MVP, ADR 0002); got q=",
-              q.sizes(), " k=", k.sizes(), " v=", v.sizes());
-  TORCH_CHECK(q.is_contiguous() && k.is_contiguous() && v.is_contiguous(),
-              "flashlite naive attention: q, k, v must be contiguous (ADR 0002: [B, H, S, D] "
-              "contiguous layout only; call .contiguous() first)");
-  for (int64_t d = 0; d < q.dim(); ++d) {
-    TORCH_CHECK(q.size(d) > 0, "flashlite naive attention: all dims must be positive, got shape ",
-                q.sizes());
-  }
+  flashlite::validate_attention_inputs(q, k, v, "naive");
 
   const int64_t B = q.size(0), H = q.size(1), S = q.size(2), D = q.size(3);
 

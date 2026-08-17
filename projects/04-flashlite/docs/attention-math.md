@@ -109,9 +109,15 @@ kernel is itself the evidence for this section's claim.
   kernels (`docs/attention-math.md` SS4's cost applies to it directly) --
   the point of V1 is "does a hand-written kernel reproduce V0's numbers",
   not efficiency (Phase 1 exit criterion).
-- **V2** (tiled, Phase 3) keeps this section's math identical but computes
-  it tile-by-tile through shared memory, without changing what gets
-  computed.
+- **V2** (`flashlite._cuda_tiled`, tiled, Phase 3, implemented) keeps this
+  section's math identical but computes the `QK^T`/`PV` steps tile-by-tile
+  through shared memory (`src/flashlite/cuda_tiled/attention_tiled.cuh`'s
+  header derives the concrete traffic-reduction argument; softmax stays
+  the same ordinary two-pass form as V1, unchanged), without changing what
+  gets computed. `docs/io-analysis.md` works out the quantitative
+  memory-traffic model this section only describes qualitatively, and
+  checks it against measured benchmarks (Phase 2 for V1's baseline, Phase
+  3 for V2's).
 - **V3** (online softmax, Phase 4) changes *how* the softmax normalization
   is accumulated (running max + running sum, `docs/online-softmax.md`) so
   it can be computed incrementally across K/V tiles instead of needing a

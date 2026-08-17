@@ -35,6 +35,12 @@ from flashlite.reference.attention import reference_attention
 from flashlite.reference.tensors import make_qkv
 from flashlite.timing import GpuTimer
 
+# ADR 0007: kAttnTileDim, mirrored here because it is a C++ constexpr
+# inside the compiled _cuda_tiled extension, not a Python-readable value
+# (ADR 0008 explains why this benchmark driver hard-codes it rather than
+# importing it).
+TILE_SIZE_V2 = 32
+
 
 def _run_variant(variant: str, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, causal: bool) -> torch.Tensor:
     if variant == "reference":
@@ -43,6 +49,10 @@ def _run_variant(variant: str, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
         from flashlite import _cuda_naive
 
         return _cuda_naive.attention_naive_forward(q, k, v, causal)
+    if variant == "tiled":
+        from flashlite import _cuda_tiled
+
+        return _cuda_tiled.attention_tiled_forward(q, k, v, causal)
     raise ValueError(f"unknown variant: {variant!r}")
 
 
@@ -78,7 +88,7 @@ def run_point(point: dict, seed: int, warmup_iters: int, measured_reps: int, env
     flops = 4.0 * batch * heads * seq_len * seq_len * head_dim  # QK^T + PV, 2 flops/MAC each
 
     result = BenchResult(
-        variant={"reference": "v0_reference", "naive": "v1_naive"}[variant],
+        variant={"reference": "v0_reference", "naive": "v1_naive", "tiled": "v2_tiled"}[variant],
         description=f"{variant} attention forward, B={batch} H={heads} S={seq_len} D={head_dim} causal={causal}",
         env=env,
         batch=batch, heads=heads, seq_len=seq_len, head_dim=head_dim, causal=causal,
@@ -90,6 +100,7 @@ def run_point(point: dict, seed: int, warmup_iters: int, measured_reps: int, env
         tolerance_atol=DEFAULT_ATOL, tolerance_rtol=DEFAULT_RTOL,
         correctness_passed=True,
         correctness_note=cmp_result.summary(),
+        tile_size=TILE_SIZE_V2 if variant == "tiled" else 0,  # ADR 0008
     )
     finalize(result)
     if result.stats and result.stats.median_ms > 0:

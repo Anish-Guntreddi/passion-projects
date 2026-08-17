@@ -1,12 +1,19 @@
 // CUDA error-check macros (mirrors KernelForge's src/common/error_check.cuh
 // exactly, in the flashlite:: namespace). Every CUDA runtime API call and
-// every kernel launch in this extension is wrapped by one of these. They
-// throw flashlite::CudaError (a std::runtime_error) rather than
+// every kernel launch in every variant's extension is wrapped by one of
+// these. They throw flashlite::CudaError (a std::runtime_error) rather than
 // abort()/exit(): pybind11 translates any uncaught std::runtime_error
 // escaping a bound function into a Python RuntimeError automatically, so
 // a bad launch config or an OOM surfaces as a clear, catchable Python
 // exception instead of crashing the interpreter (spec hard constraint:
 // "unsupported shapes must fail clearly").
+//
+// Lives in cuda_common/ (not any one variant's directory) because it is
+// infrastructure shared identically by every variant's separately-compiled
+// extension (V1 cuda_naive, V2 cuda_tiled, and later V3/V4) -- unlike the
+// kernels themselves, sharing this file does not blur the "one optimization
+// variable per variant" ladder story (spec SS1.3): error-checking discipline
+// is not part of what the ladder is measuring.
 #pragma once
 
 #include <cuda_runtime.h>

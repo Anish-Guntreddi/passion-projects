@@ -81,6 +81,11 @@
       "description": "A result with correctness_passed=false must never be committed to benchmarks/raw/ -- fix the kernel first (spec hard constraint: correctness precedes speed)."
     },
     "correctness_note": { "type": "string" },
+    "tile_size": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "ADR 0008: kernel-launch tile dimension (kAttnTileDim, ADR 0007), populated only for variant=\"v2_tiled\" (32 as of Phase 3). 0 = not applicable (v0_reference, v1_naive have no tile-size concept). Optional/additive -- intentionally not in the required array, so every Phase 0/1 record committed before this field existed remains schema-valid unchanged."
+    },
     "notes": { "type": "string" }
   }
 }

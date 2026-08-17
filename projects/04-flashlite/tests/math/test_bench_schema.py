@@ -132,6 +132,32 @@ def test_to_json_round_trips_through_json_loads() -> None:
     assert len(parsed["raw_timings_ms"]) == 20
 
 
+def test_tile_size_defaults_to_zero_and_validates() -> None:
+    """ADR 0008: tile_size defaults to 0 ("not applicable") for variants
+    with no tile-size concept (v0_reference, v1_naive) and must still
+    validate against the schema -- the field is optional/additive, not
+    required.
+    """
+    result = _make_result()
+    assert result.tile_size == 0
+    finalize(result)
+    doc = to_json_dict(result)
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(instance=doc, schema=schema)
+
+
+def test_tile_size_v2_tiled_record_validates() -> None:
+    """ADR 0007/0008: a v2_tiled record with a populated tile_size (the
+    kAttnTileDim launch-config constant) validates against the schema too.
+    """
+    result = _make_result(variant="v2_tiled", tile_size=32)
+    finalize(result)
+    doc = to_json_dict(result)
+    assert doc["tile_size"] == 32
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(instance=doc, schema=schema)
+
+
 def test_append_jsonl_appends_without_truncating(tmp_path: Path) -> None:
     path = tmp_path / "attention.jsonl"
     result = _make_result()

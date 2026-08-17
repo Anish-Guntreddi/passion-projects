@@ -1,0 +1,26 @@
+{
+  "description": "Phase 3 (tiling) sweep: v0_reference vs v1_naive vs v2_tiled. Two sub-sweeps: (1) sequence-length sweep at a fixed representative (B=1, H=8, D=64) shape, causal, S in [128, 512, 1024, 2048] -- spans the same L2-crossing range benchmarks/configs/memory_accounting.json establishes the v1_naive baseline over, so v2_tiled's numbers are directly comparable point-for-point; (2) head-dim sweep at a fixed (B=1, H=8, S=512) shape, causal, D in [32, 128] (D=64 already covered by the seq-len sweep's S=512 point, not repeated here) -- spec SS1.8's \"head-dim sensitivity\" benchmark-plan dimension. Every point is correctness-checked against v0_reference before it is timed. Run by scripts/run_benchmarks.py --config benchmarks/configs/tiled_comparison.json; results append to the same benchmarks/raw/attention.jsonl.",
+  "seed": 123456789,
+  "warmup_iters": 5,
+  "measured_reps": 20,
+  "points": [
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "tiled",     "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "tiled",     "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "tiled",     "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "tiled",     "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 512, "head_dim": 32,  "causal": true },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 512, "head_dim": 128, "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 512, "head_dim": 32,  "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 512, "head_dim": 128, "causal": true },
+    { "variant": "tiled",     "batch": 1, "heads": 8, "seq_len": 512, "head_dim": 32,  "causal": true },
+    { "variant": "tiled",     "batch": 1, "heads": 8, "seq_len": 512, "head_dim": 128, "causal": true }
+  ]
+}

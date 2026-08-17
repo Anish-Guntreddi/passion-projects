@@ -71,6 +71,13 @@ class BenchResult:
     correctness_passed: bool = False
     correctness_note: str = ""
 
+    # Phase 3 / ADR 0008: kernel-launch tile dimension (kAttnTileDim,
+    # ADR 0007), populated only for variant="v2_tiled". 0 = "not
+    # applicable" (v0_reference, v1_naive have no tile-size concept) --
+    # same optional-field, "not applicable"-sentinel convention KernelForge
+    # ADR 0011 uses for its own per-family-only fields.
+    tile_size: int = 0
+
     notes: str = ""
 
 

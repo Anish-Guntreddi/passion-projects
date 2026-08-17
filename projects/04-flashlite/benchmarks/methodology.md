@@ -44,6 +44,11 @@ produces it is `flashlite.bench_schema.BenchResult`
 - `tolerance_atol` / `tolerance_rtol` / `correctness_passed` /
   `correctness_note`: the exact tolerance used and the result of the
   correctness check that ran **before** this result's timing loop.
+- `tile_size` (ADR 0008, added Phase 3): the kernel-launch tile dimension
+  (`kAttnTileDim`, ADR 0007) for `v2_tiled` records (`32` as of Phase 3);
+  `0` ("not applicable") for `v0_reference`/`v1_naive`, which have no
+  tile-size concept. Optional/additive -- every Phase 0/1 record committed
+  before this field existed remains schema-valid unchanged.
 
 ## 2. How a result is produced (reproducibility)
 
@@ -143,7 +148,12 @@ for FP32 (ADR 0004), via `flashlite.compare.allclose_compare`
 sweep specification -- the single source of truth for "what shapes/variants
 were run, with what warmup/reps/seed." `scripts/run_benchmarks.py` reads it
 directly; nothing about a sweep is hand-typed into a script or README that
-could drift from what was actually run.
+could drift from what was actually run. Phase 2 added
+`benchmarks/configs/memory_accounting.json` (`v0_reference`/`v1_naive`
+across an L2-cache-crossing `seq_len` range, SS9); Phase 3 added
+`benchmarks/configs/tiled_comparison.json` (adds `v2_tiled`, a
+sequence-length and a head-dim sub-sweep, SS9) -- same convention, one file
+per sweep, results appended to the same `benchmarks/raw/attention.jsonl`.
 
 ## 8. Phase 0/1 results -- v0_reference vs v1_naive
 
@@ -212,3 +222,78 @@ Full per-repetition timings, exact launch shapes, environment metadata,
 and correctness tolerances for every point above are in
 `benchmarks/raw/attention.jsonl`; nothing above is restated without a path
 back to that committed record.
+
+## 9. Phase 2/3 results -- memory accounting and v2_tiled
+
+Two more sweeps, appended to the same `benchmarks/raw/attention.jsonl`
+(34 records total as of Phase 3, all `correctness_passed=true`, all
+schema-valid): `benchmarks/configs/memory_accounting.json` (Phase 2 --
+`v0_reference`/`v1_naive`, `B=1 H=8 D=64` non-causal, `seq_len` in `[256,
+512, 1024, 2048, 4096]`, spanning this GPU's 72 MiB L2 cache boundary) and
+`benchmarks/configs/tiled_comparison.json` (Phase 3 -- adds `v2_tiled`,
+a sequence-length sweep and a head-dim sweep, both causal, `B=1 H=8`).
+20 reps each, `seed=123456789`, `warmup_iters=5`.
+
+**`docs/io-analysis.md` is the full writeup** (theoretical model, the
+Phase 2 hypothesis stated before this sweep ran, and section-by-section
+comparison against what these two sweeps actually showed) -- this section
+only restates the tables, run under the GPU-benchmark lock per this
+project's hard rules, so a reader does not have to cross-reference a
+second document to see the raw numbers a claim in `docs/io-analysis.md`
+traces back to.
+
+### As-run summary (2026-08-17, RTX 4090 / sm_89 / CUDA 12.6, WSL2)
+
+Environment: torch `2.13.0+cu126`, CUDA driver `591.86`,
+`observed_sm_clock_mhz=2250` / `observed_mem_clock_mhz=10501` at capture
+time (this run happened to catch the GPU closer to its boost clock than
+the idle `210`/`405` MHz snapshot Phase 0/1's summary above recorded --
+per SS3, clocks are unlocked on this platform regardless, so this is
+still "typical for this desktop under WSL2 at time of capture," not a
+locked-clock measurement, and is not compared numerically against the
+Phase 0/1 table above for that reason).
+
+**Memory-accounting sweep -- `v0_reference` vs `v1_naive`, `B=1 H=8 D=64`,
+non-causal, median ms and effective bandwidth (GB/s), 20 reps:**
+
+| `seq_len` | v0 median ms | v0 GB/s | v1 median ms | v1 GB/s |
+|---:|---:|---:|---:|---:|
+| 256  | 0.1630 | 12.87 | 0.1403  | 14.94 |
+| 512  | 0.1192 | 35.18 | 0.5093  | 8.24  |
+| 1024 | 0.2053 | 40.86 | 4.1231  | 2.03  |
+| 2048 | 1.0329 | 16.24 | 13.9054 | 1.21  |
+| 4096 | 6.6703 | 5.03  | 55.6073 | 0.60  |
+
+**Tiled-comparison sweep -- sequence-length sub-sweep, `B=1 H=8 D=64`,
+causal, median ms, 20 reps:**
+
+| `seq_len` | v0 median ms | v1 median ms | v2 median ms |
+|---:|---:|---:|---:|
+| 128  | 0.1989 | 0.0485 | 0.1506 |
+| 512  | 0.1603 | 0.3195 | 0.1935 |
+| 1024 | 0.2647 | 1.1540 | 0.7044 |
+| 2048 | 1.6630 | 5.1461 | 3.1251 |
+
+**Tiled-comparison sweep -- head-dim sub-sweep, `B=1 H=8 seq_len=512`,
+causal, median ms, 20 reps:**
+
+| `head_dim` | v0 median ms | v1 median ms | v2 median ms |
+|---:|---:|---:|---:|
+| 32  | 0.1516 | 0.1707 | 0.1157 |
+| 64 (= seq-len sub-sweep's `S=512` row) | 0.1603 | 0.3195 | 0.1935 |
+| 128 | 0.1413 | 0.5791 | 0.3492 |
+
+`v2_tiled`'s `tile_size` field (ADR 0008) is `32` on every one of these
+records, `0` on every `v0_reference`/`v1_naive` record, per ADR 0007/0008.
+Every `correctness_note` in this sweep shows a small, tolerance-passing
+FP32 discrepancy for `v1_naive`/`v2_tiled` against `v0_reference` (same
+`atol=1e-5, rtol=1e-4` bound as SS6 above; see the raw `.jsonl` for exact
+per-point values) and `0.0` for `v0_reference` against itself.
+
+See `docs/io-analysis.md` SS5/SS7 for what these numbers mean: the `1/S`
+effective-bandwidth decay and `S^2` latency scaling `v1_naive` shows once
+its working set exceeds the L2 cache (SS5.1), the Nsight Systems capture
+and its real limitation in this environment (SS5.2), and the
+sequence-length-independent-but-head-dim-dependent speedup `v2_tiled`
+shows over `v1_naive`, including the honest discussion of why that speedup
+is far smaller than the underlying arithmetic-intensity improvement (SS7).

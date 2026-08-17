@@ -1,0 +1,18 @@
+{
+  "description": "Phase 2 (memory accounting) sweep: v0_reference vs v1_naive across a sequence-length range from well inside this GPU's 72MB L2 cache (S=256, ~4.2MB combined Q/K/V/O/scores working set) to well beyond it (S=4096, ~570MB) at a fixed representative (B=1, H=8, D=64) shape, non-causal. Purpose: measure v1_naive's effective bandwidth once its working set can no longer be served from L2 -- the regime docs/io-analysis.md's theoretical no-reuse HW-traffic model (and the bottleneck hypothesis derived from it) is written to predict. Every point is correctness-checked against v0_reference before it is timed. Run by scripts/run_benchmarks.py --config benchmarks/configs/memory_accounting.json; results append to the same benchmarks/raw/attention.jsonl (single file for the \"attention\" kernel family, per benchmarks/methodology.md SS1).",
+  "seed": 123456789,
+  "warmup_iters": 5,
+  "measured_reps": 20,
+  "points": [
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 256,  "head_dim": 64, "causal": false },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": false },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": false },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": false },
+    { "variant": "reference", "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": false },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 256,  "head_dim": 64, "causal": false },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": false },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": false },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": false },
+    { "variant": "naive",     "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": false }
+  ]
+}

@@ -18,6 +18,7 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 # source paths ("setup() arguments must always be /-separated paths
 # relative to the setup.py directory").
 CUDA_NAIVE_DIR = os.path.join("src", "flashlite", "cuda_naive")
+CUDA_TILED_DIR = os.path.join("src", "flashlite", "cuda_tiled")
 
 # Pinned to sm_89 (RTX 4090), matching KernelForge's ADR 0001
 # (../02-kernelforge/docs/decisions/0001-target-gpu-architecture.md) -- the
@@ -38,6 +39,22 @@ setup(
             sources=[
                 os.path.join(CUDA_NAIVE_DIR, "bindings.cpp"),
                 os.path.join(CUDA_NAIVE_DIR, "attention_naive.cu"),
+            ],
+            extra_compile_args={
+                "cxx": ["-O3", "-std=c++17"],
+                "nvcc": ["-O3", "--expt-relaxed-constexpr", "-lineinfo"],
+            },
+        ),
+        # V2 (Phase 3): shared-memory-tiled QK^T/PV, same build route (ADR
+        # 0005), a separate extension module so V1 and V2 stay independently
+        # importable/buildable -- matching the "variants live side-by-side"
+        # convention (spec Part 2) rather than one module with an internal
+        # variant switch.
+        CUDAExtension(
+            name="flashlite._cuda_tiled",
+            sources=[
+                os.path.join(CUDA_TILED_DIR, "bindings.cpp"),
+                os.path.join(CUDA_TILED_DIR, "attention_tiled.cu"),
             ],
             extra_compile_args={
                 "cxx": ["-O3", "-std=c++17"],
