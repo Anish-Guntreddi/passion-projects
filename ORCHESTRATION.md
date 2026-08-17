@@ -12,14 +12,14 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 
 | Project | Wave | Current phase | Status | Notes |
 |---|---|---|---|---|
-| 01 ForgeLM | 1 | — | queued | Python/PyTorch; CPU tests, GPU runs |
-| 02 KernelForge | 1b | — | blocked-on-CUDA-toolkit | needs nvcc in WSL |
+| 01 ForgeLM | 1 | 0–1 | in-progress (wf_2d7c2ef0) | Python/PyTorch; CPU tests, GPU runs |
+| 02 KernelForge | 1b | 0–1 | in-progress (wf_abbea9dd) | nvcc 12.6 verified, GPU smoke PASS |
 | 03 MiniPaged | 2 | — | waiting (ForgeLM) | |
 | 04 FlashLite | 2 | — | waiting (KernelForge) | |
-| 05 ArcServe | 1 | — | queued | epoll → WSL |
+| 05 ArcServe | 1 | 0–1 | in-progress (wf_2d7c2ef0) | epoll → WSL |
 | 06 PebbleDB | 2 | — | waiting (ArcServe soft-dep) | |
-| 07 xv6-plus | 1 | — | queued | QEMU RISC-V in WSL |
-| 08 ReleaseGuard | 1 | — | queued | Go + kind |
+| 07 xv6-plus | 1 | 0–1 | in-progress (wf_2d7c2ef0) | QEMU RISC-V in WSL |
+| 08 ReleaseGuard | 1 | 0–1 | in-progress (wf_2d7c2ef0) | Go + kind |
 | 09 Helios | 3 | — | waiting (capstone) | must be last |
 | Showcase site | 4 | — | waiting (all) | GitHub Pages |
 
