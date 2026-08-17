@@ -143,6 +143,38 @@ It does **not**, and cannot, verify:
   occurred), not a durability claim about `kExplicit` itself, which makes
   no durability promise for unsynced records.
 
+## SSTable durability (Phase 3)
+
+`sstable::Writer::Finish()` fsyncs the file once, after the footer has
+been written, before returning `OK` — so a `Writer::Finish()` that returns
+`OK` means the *entire* table (every data block, the index block, and the
+footer) is durable, not just some prefix of it. `Writer::Open()` uses
+`util::PosixFile::OpenNew`, not `OpenAppend`'s create-or-reopen semantics
+— see ADR 0011 — so creating a brand-new SSTable file gets the same
+containing-directory fsync as a brand-new WAL file (see "File creation
+durability: directory entries" above) — by the time `Writer::Open()`
+returns `OK`, the directory entry is already durable, so `Finish()` only
+needs to make the file's own bytes durable. `OpenNew` also guarantees
+`Open()` never succeeds against a path that already has *real* content
+(a merely-empty placeholder path is fine and always starts a fresh file),
+which matters for durability bookkeeping specifically: `Writer`'s
+`file_offset_` (and therefore every `BlockHandle` it records) starts from
+0 and must exactly match on-disk byte positions, which silently stops
+being true if `Open()` ever appended to genuinely pre-existing content
+instead of failing outright.
+
+This project does not yet have a component that decides *when* to call
+`Finish()` and then discards the MemTable data that table was flushed from
+(that coordination — a flush routine, wired into `DB`, that only clears
+WAL/MemTable state after a table's `Finish()` has actually returned `OK` —
+is Phase 4's "manifest never intentionally references a partially
+published table" concern, spec invariant 5). Phase 3's `Writer`/`Reader`
+are deliberately silent on that question: `Writer::Finish()` either fully
+succeeds (whole table durable) or returns a non-OK `Status` (nothing after
+that point is guaranteed durable, and the caller must not treat the table
+as usable) — there is no partial-success state a caller could observe and
+mistake for a complete table.
+
 ## Benchmark labeling (spec §1.9)
 
 Every benchmark report that measures write latency or throughput must state

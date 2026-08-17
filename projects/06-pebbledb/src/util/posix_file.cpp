@@ -72,6 +72,54 @@ Status PosixFile::OpenAppend(const std::string& path, std::unique_ptr<PosixFile>
   return Status::OK();
 }
 
+Status PosixFile::OpenNew(const std::string& path, std::unique_ptr<PosixFile>* out) {
+  // A path that already has real (non-zero-byte) content is refused
+  // outright: a writer built on OpenNew() assumes it is starting from
+  // file offset 0, so it must never be pointed at a file that already
+  // has bytes in it (see OpenNew()'s header comment and ADR 0011). A
+  // zero-byte file, though, is not "existing content" in any sense that
+  // matters here -- it is indistinguishable from "does not exist yet"
+  // for every purpose this call cares about, so it is accepted exactly
+  // like a genuinely-absent path. (This is also what lets callers use a
+  // race-free-but-empty pre-reserved path -- e.g. tests/support's
+  // TempFile -- with an OpenNew()-based writer with no special-casing.)
+  struct stat existing_stat {};
+  const bool existed_before = (::stat(path.c_str(), &existing_stat) == 0);
+  if (existed_before && existing_stat.st_size != 0) {
+    return Status::IOError("OpenNew: refusing to open '" + path + "': path already has " +
+                            std::to_string(existing_stat.st_size) +
+                            " byte(s) of content (expected an absent or empty path)");
+  }
+
+  // O_TRUNC is defense-in-depth, not the primary guarantee -- the check
+  // above is what actually rejects real pre-existing content. This just
+  // guarantees a genuinely zero-byte starting point even across the
+  // stat()-then-open() window above, which (like the same window in
+  // OpenAppend(), above) is not a concern this single-writer-per-file
+  // project defends against concurrently (ADR 0003). No O_APPEND: this
+  // fd is for one sequential writer tracking its own offset from 0, not
+  // the "safe under concurrent appenders" scenario O_APPEND exists for
+  // on the WAL path.
+  int fd = ::open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  if (fd < 0) {
+    return Status::IOError(ErrnoMessage("open (new) failed for '" + path + "'"));
+  }
+
+  if (!existed_before) {
+    // A new directory entry was just created for `path` -- fsync the
+    // containing directory before reporting success, same as
+    // OpenAppend()'s "did this call create a new entry" case.
+    Status dir_status = SyncContainingDirectory(path);
+    if (!dir_status.ok()) {
+      ::close(fd);
+      return dir_status;
+    }
+  }
+
+  out->reset(new PosixFile(fd));
+  return Status::OK();
+}
+
 Status PosixFile::OpenRead(const std::string& path, std::unique_ptr<PosixFile>* out) {
   int fd = ::open(path.c_str(), O_RDONLY);
   if (fd < 0) {
@@ -134,6 +182,40 @@ Status PosixFile::Read(std::size_t n, std::string* out, bool* short_read) {
   if (short_read != nullptr) {
     *short_read = (total < n);
   }
+  return Status::OK();
+}
+
+Status PosixFile::ReadAt(std::uint64_t offset, std::size_t n, std::string* out, bool* short_read) {
+  out->assign(n, '\0');
+  std::size_t total = 0;
+  while (total < n) {
+    ssize_t got = ::pread(fd_, out->data() + total, n - total,
+                          static_cast<off_t>(offset + static_cast<std::uint64_t>(total)));
+    if (got < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      out->clear();
+      return Status::IOError(ErrnoMessage("pread failed"));
+    }
+    if (got == 0) {
+      break;  // EOF
+    }
+    total += static_cast<std::size_t>(got);
+  }
+  out->resize(total);
+  if (short_read != nullptr) {
+    *short_read = (total < n);
+  }
+  return Status::OK();
+}
+
+Status PosixFile::Size(std::uint64_t* out) {
+  struct stat st {};
+  if (::fstat(fd_, &st) != 0) {
+    return Status::IOError(ErrnoMessage("fstat failed"));
+  }
+  *out = static_cast<std::uint64_t>(st.st_size);
   return Status::OK();
 }
 

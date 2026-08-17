@@ -37,18 +37,25 @@ add_library(pebbledb_sanitizers INTERFACE)
 pebbledb_enable_sanitizers(pebbledb_sanitizers)
 
 # --- Core library --------------------------------------------------------
-# Everything (status/error model, byte encoding, checksums, WAL, the
-# Phase-0 in-memory DB) lives in pebbledb_core so tools and every test
-# binary link the exact same translation units.
+# Everything (status/error model, byte encoding, checksums, WAL, MemTable,
+# SSTable, the Phase-0 in-memory DB) lives in pebbledb_core so tools and
+# every test binary link the exact same translation units.
 add_library(pebbledb_core
   src/status.cpp
   src/db.cpp
+  src/entry_type.cpp
+  src/lookup_result.cpp
   src/util/coding.cpp
   src/util/crc32c.cpp
   src/util/posix_file.cpp
   src/wal/record.cpp
   src/wal/writer.cpp
   src/wal/reader.cpp
+  src/memtable/memtable.cpp
+  src/memtable/memtable_list.cpp
+  src/sstable/format.cpp
+  src/sstable/writer.cpp
+  src/sstable/reader.cpp
 )
 target_include_directories(pebbledb_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -65,10 +72,14 @@ if(UNIX)
   target_link_libraries(pebbledb_core PUBLIC Threads::Threads)
 endif()
 
+# --- Tools -----------------------------------------------------------------
+# tools/inspect_sstable is Phase 3's file-inspector deliverable (spec FR3).
+# tools/pebble_cli (the end-to-end DB CLI) still does not exist yet --
+# persistence is not wired into DB until Phase 4 (see README "What's not
+# here yet").
+add_subdirectory(tools)
+
 # --- Tests -----------------------------------------------------------------
-# No production executable yet: Phase 0/1 deliver the library (in-memory DB
-# + standalone WAL module) per the roadmap; tools/pebble_cli arrives once
-# persistence is wired end-to-end (see README "What's not here yet").
 if(PEBBLEDB_BUILD_TESTS)
   enable_testing()
 

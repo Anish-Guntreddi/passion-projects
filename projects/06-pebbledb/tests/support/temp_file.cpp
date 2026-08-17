@@ -75,7 +75,25 @@ std::string ReadWholeFile(const std::string& path) {
   if (!f) {
     throw std::runtime_error("failed to open for reading: " + path);
   }
-  std::string contents((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+  // Seek-to-end-then-read, rather than the istreambuf_iterator-range
+  // constructor: the latter trips GCC's -Wnull-dereference under -O2
+  // (Release builds) on the standard library's own gptr()/sbumpc()
+  // internals -- a known false positive, not a real bug in this
+  // function, but PEBBLEDB_WARNINGS_AS_ERRORS (ADR 0001) means it must
+  // still be avoided rather than suppressed.
+  f.seekg(0, std::ios::end);
+  const auto size = f.tellg();
+  if (size < 0) {
+    throw std::runtime_error("failed to determine size of: " + path);
+  }
+  std::string contents(static_cast<std::size_t>(size), '\0');
+  f.seekg(0, std::ios::beg);
+  if (!contents.empty()) {
+    f.read(contents.data(), static_cast<std::streamsize>(contents.size()));
+    if (!f) {
+      throw std::runtime_error("failed to read: " + path);
+    }
+  }
   return contents;
 }
 
