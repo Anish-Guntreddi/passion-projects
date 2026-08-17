@@ -1,0 +1,4 @@
+Reserved for Phase 6 .ncu-rep captures. Empty by design in Phases 0-1
+(Nsight Compute is not installed on the development machine as of
+2026-08-17 -- see docs/decisions/0006-sass-analysis-depth.md and
+profiling/metric-guide.md).

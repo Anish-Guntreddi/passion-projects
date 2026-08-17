@@ -1,0 +1,12 @@
+{
+  "kernel_family": "stride_copy",
+  "binary": "bench_stride",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["stride_copy"],
+  "sweep_param": "stride",
+  "sweep_values": [1, 2, 4, 8, 16, 32, 64, 128],
+  "fixed_args": { "n": 1048576 },
+  "notes": "Dedicated coalescing microbenchmark: num_threads fixed at 2^20 (--n), stride swept. out[i*stride]=in[i*stride] for i in [0, num_threads); useful bytes moved is constant across the sweep (2 * num_threads * 4 bytes), isolating access-pattern as the sole variable behind effective_bandwidth_gb_s. Max buffer footprint at stride=128 is ~512 MiB per array."
+}

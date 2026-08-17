@@ -1,0 +1,12 @@
+{
+  "kernel_family": "transpose",
+  "binary": "bench_transpose",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_naive", "v2_tiled"],
+  "sweep_param": "n",
+  "sweep_values": [256, 512, 1024, 2048, 4096, 8192],
+  "fixed_args": {},
+  "notes": "Square n x n matrices. v1_naive: coalesced read, pathological (stride=n) write. v2_tiled: shared-memory-staged, coalesced read AND write (unpadded tile; known SMEM bank conflict, V4 padding not yet implemented -- see kernels/transpose/transpose_tiled.cuh). Same sizes/seed for both variants so they are directly comparable."
+}

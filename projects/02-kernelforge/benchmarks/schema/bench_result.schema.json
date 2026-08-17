@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://kernelforge.local/schema/bench_result.schema.json",
+  "title": "KernelForge BenchResult",
+  "description": "One committed, machine-readable benchmark measurement (ADR 0010). Mirrors src/common/bench_result.hpp:BenchResult exactly; the two must be kept in sync by hand until/unless a code generator is introduced.",
+  "type": "object",
+  "required": [
+    "schema_version", "kernel_family", "variant", "env", "n", "dtype",
+    "launch_config", "warmup_iters", "measured_reps", "seed",
+    "raw_timings_ms", "stats_ms", "bytes_moved", "effective_bandwidth_gb_s",
+    "gflops", "tolerance_atol", "tolerance_rtol", "correctness_passed",
+    "correctness_note"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "kernel_family": { "type": "string", "enum": ["vector_add", "saxpy", "transpose", "stride_copy"] },
+    "variant": { "type": "string" },
+    "description": { "type": "string" },
+    "env": {
+      "type": "object",
+      "required": [
+        "gpu_name", "compute_capability", "cuda_driver_version",
+        "cuda_runtime_version", "host_compiler_id", "host_compiler_version",
+        "cuda_compiler_id", "cuda_compiler_version", "cuda_architectures",
+        "build_type", "compile_flags_note", "locked_clocks", "clock_lock_note",
+        "observed_sm_clock_mhz", "observed_mem_clock_mhz", "os_note", "timestamp_utc"
+      ],
+      "properties": {
+        "gpu_name": { "type": "string" },
+        "compute_capability": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "cuda_driver_version": { "type": "string" },
+        "cuda_runtime_version": { "type": "string" },
+        "host_compiler_id": { "type": "string" },
+        "host_compiler_version": { "type": "string" },
+        "cuda_compiler_id": { "type": "string" },
+        "cuda_compiler_version": { "type": "string" },
+        "cuda_architectures": { "type": "string" },
+        "build_type": { "type": "string" },
+        "compile_flags_note": { "type": "string" },
+        "locked_clocks": { "type": "boolean" },
+        "clock_lock_note": { "type": "string" },
+        "observed_sm_clock_mhz": { "type": "integer" },
+        "observed_mem_clock_mhz": { "type": "integer" },
+        "os_note": { "type": "string" },
+        "timestamp_utc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "n": { "type": "integer", "minimum": 0 },
+    "rows": { "type": "integer", "minimum": 0 },
+    "cols": { "type": "integer", "minimum": 0 },
+    "stride": { "type": "integer", "minimum": 0 },
+    "dtype": { "type": "string", "const": "fp32" },
+    "launch_config": {
+      "type": "object",
+      "required": ["block", "grid"],
+      "properties": {
+        "block": { "type": "array", "items": { "type": "integer" }, "minItems": 3, "maxItems": 3 },
+        "grid": { "type": "array", "items": { "type": "integer" }, "minItems": 3, "maxItems": 3 }
+      }
+    },
+    "warmup_iters": { "type": "integer", "minimum": 0 },
+    "measured_reps": { "type": "integer", "minimum": 20, "description": "ADR 0005: >= 20 measured repetitions required for any committed result." },
+    "seed": { "type": "integer", "minimum": 0 },
+    "raw_timings_ms": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 },
+      "description": "Every individual repetition's kernel-only elapsed time. Length must equal measured_reps. FR4: never a single timing. NOTE: JSON Schema draft-07 cannot express this array-length-equals-sibling-value invariant without a non-standard $data extension, so it is enforced as an explicit cross-field check in scripts/validate_results.py rather than here."
+    },
+    "stats_ms": {
+      "type": "object",
+      "required": ["min", "max", "mean", "median", "stddev", "p25", "p75"],
+      "properties": {
+        "min": { "type": "number" },
+        "max": { "type": "number" },
+        "mean": { "type": "number" },
+        "median": { "type": "number" },
+        "stddev": { "type": "number" },
+        "p25": { "type": "number" },
+        "p75": { "type": "number" }
+      }
+    },
+    "bytes_moved": { "type": "number", "minimum": 0 },
+    "effective_bandwidth_gb_s": { "type": "number", "minimum": 0 },
+    "gflops": { "type": "number", "minimum": 0 },
+    "tolerance_atol": { "type": "number", "minimum": 0 },
+    "tolerance_rtol": { "type": "number", "minimum": 0 },
+    "correctness_passed": {
+      "type": "boolean",
+      "const": true,
+      "description": "A result with correctness_passed=false should never be committed to benchmarks/raw/ -- fix the kernel first (hard constraint 1)."
+    },
+    "correctness_note": { "type": "string" },
+    "notes": { "type": "string" }
+  }
+}

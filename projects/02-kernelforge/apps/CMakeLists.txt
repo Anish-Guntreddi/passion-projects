@@ -1,0 +1,11 @@
+function(kf_add_app name)
+  add_executable(${name} ${ARGN})
+  target_include_directories(${name} PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/apps)
+  target_link_libraries(${name} PRIVATE kf_common kf_kernels CUDA::cudart kf_warnings)
+endfunction()
+
+kf_add_app(device-info       device_info_main.cpp)
+kf_add_app(bench_vector_add  bench_vector_add_main.cpp)
+kf_add_app(bench_saxpy       bench_saxpy_main.cpp)
+kf_add_app(bench_transpose   bench_transpose_main.cpp)
+kf_add_app(bench_stride      bench_stride_main.cpp)

@@ -1,0 +1,12 @@
+{
+  "kernel_family": "saxpy",
+  "binary": "bench_saxpy",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_naive"],
+  "sweep_param": "n",
+  "sweep_values": [4096, 65536, 1048576, 16777216, 67108864],
+  "fixed_args": {},
+  "notes": "Unit-stride baseline (a=2.5) across the same size sweep as vector_add for a direct comparison."
+}

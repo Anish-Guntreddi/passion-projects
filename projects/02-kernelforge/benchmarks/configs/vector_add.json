@@ -1,0 +1,12 @@
+{
+  "kernel_family": "vector_add",
+  "binary": "bench_vector_add",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_naive"],
+  "sweep_param": "n",
+  "sweep_values": [4096, 65536, 1048576, 16777216, 67108864],
+  "fixed_args": {},
+  "notes": "Unit-stride baseline across a size sweep spanning L2-resident to well-beyond-L2 sizes. No pathological variant exists for vector_add; included as the 'fully healthy' reference point."
+}
