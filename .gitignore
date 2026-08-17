@@ -1,0 +1,6 @@
+# Claude Code session history (local only)
+.remember/
+.claude/
+
+# OS cruft
+.DS_Store
