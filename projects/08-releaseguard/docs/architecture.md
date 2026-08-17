@@ -116,29 +116,135 @@ resources rather than a separate overlay, since both tracks always deploy
 together locally -- there is no scenario yet where you would want the
 base without the canary.
 
-## Controller (not yet built)
+## Controller (Phases 4-5)
 
-`controller/` does not exist yet. When it lands starting Phase 4, it will
-be a standalone Go service (not a CRD/operator -- see
-[ADR 0006](decisions/0006-standalone-vs-operator.md)) that:
+`controller/` is a separate Go module (`releaseguard/controller`,
+`controller/go.mod`) from `demo-service/` -- a standalone service, not a
+CRD/operator (per [ADR 0006](decisions/0006-standalone-vs-operator.md)).
+Phase 4 built the policy/evaluator core; Phase 5 built the release state
+machine and audit log on top of it. Phase 6 (not yet built) adds the
+Kubernetes deploy/rollback adapter that will make this real against a live
+cluster; everything described below already runs today against recorded
+telemetry fixtures, with zero cluster or network dependency.
 
-1. Loads a typed policy (YAML/JSON, absolute thresholds first --
-   [ADR 0007](decisions/0007-absolute-vs-relative-thresholds.md)).
-2. Queries Prometheus via instant + range HTTP queries behind a
-   `MetricsQuerier` interface
-   ([ADR 0004](decisions/0004-prometheus-query-strategy.md)), which is
-   what makes its decision logic unit-testable against fixture data
-   without a live cluster.
-3. Runs a decision state machine (PENDING -> DEPLOYING -> OBSERVING ->
-   HEALTHY/DEGRADED/INCONCLUSIVE -> PROMOTING/ROLLING_BACK/PAUSED ->
-   COMPLETED/FAILED, per spec §1.3 FR4) and writes every transition to an
-   append-only JSONL audit log
-   ([ADR 0005](decisions/0005-audit-persistence.md)).
-4. Applies promote/rollback decisions via an idempotent Kubernetes adapter
-   (Phase 6) -- expected to be a thin wrapper around patching the stable
-   and canary Deployments' replica counts, consistent with the
-   replica-count traffic-split design in ADR 0003.
+```
+controller/
+  cmd/controller/        CLI: `validate` (policy) and `simulate` (scenario -> full rollout)
+  internal/policy/       typed policy schema + validation (FR4)
+  internal/metrics/      Querier interface: Prometheus (real) + Fixture (tests/CLI) -- ADR 0004
+  internal/evaluator/    single-window evaluation: policy + Querier -> WindowResult
+  internal/rollout/      the release lifecycle state machine + Action interface
+  internal/audit/        JSONL audit log (ADR 0005) + in-memory logger for tests
+  internal/scenario/     loads a recorded-telemetry fixture, drives evaluator+rollout end to end
+  policy/examples/       the default demo-service policy (values flagged for human review)
+  scenarios/             spec §1.8's five demo scenarios (A-E) as fixture files
+```
 
-This section will be rewritten with real detail once that code exists;
-it is included here now so the Phase 0-1 architecture is legible in the
-context of where it's headed, not just what it is today.
+### Policy (`internal/policy`) -- Phase 4
+
+A typed YAML/JSON policy (single schema for both formats via
+`sigs.k8s.io/yaml`, unknown fields rejected) defines: evaluation window +
+cadence, minimum sample count/traffic, consecutive healthy/unhealthy
+window counts, maximum rollout duration, the action on missing telemetry
+(`pause` or `rollback` -- no `promote` value exists in the schema), and a
+list of signals, each an absolute threshold (required) plus an optional
+canary-vs-baseline relative guardrail
+([ADR 0007](decisions/0007-absolute-vs-relative-thresholds.md): additive,
+never a replacement). A signal's `query` is a `text/template` string
+(`{{.Track}}`, `{{.Window}}`) rendered once per track evaluated -- see
+[`docs/slo-policy.md`](slo-policy.md) for the full schema and which
+values in `controller/policy/examples/demo-service-default.yaml` are still
+flagged for human review.
+
+### Metrics query (`internal/metrics`) -- Phase 4, ADR 0004
+
+`Querier` is the interface the evaluator depends on: `InstantQuery` and
+`RangeQuery`, matching ADR 0004's two PromQL shapes.`Prometheus` wraps
+`github.com/prometheus/client_golang`'s v1 API client against a live
+server (tested against an `httptest.Server` speaking the real Prometheus
+HTTP API response shape -- `controller/internal/metrics/prometheus_test.go`
+-- since `tests/integration/` cannot import an `internal/` package outside
+its own module's import-path prefix; see `tests/README.md`). `Fixture` is
+the in-memory, map-backed implementation tests and the CLI's `simulate`
+command use instead. Both surface `ErrNoData` for "no series" and for
+Prometheus's own NaN representation of a 0/0 division -- never a value the
+evaluator could mistake for real data.
+
+### Evaluator (`internal/evaluator`) -- Phase 4
+
+`Evaluator.Evaluate(ctx, track, now)` runs the sample-count gate (if
+configured) then every signal, and classifies the window `HEALTHY`,
+`DEGRADED`, or `INCONCLUSIVE`. A missing *required* signal, a missing
+sample count, or a missing relative-guardrail baseline all classify the
+window `INCONCLUSIVE` -- never `HEALTHY` -- regardless of every other
+signal's value (Claude Code handoff rule 1, enforced here structurally,
+not by convention). A signal marked `optional: true` is the one exception:
+its own absence doesn't force `INCONCLUSIVE`.
+
+### Rollout state machine (`internal/rollout`) -- Phase 5
+
+`Rollout` implements the spec's full lifecycle chain exactly:
+
+```
+PENDING -> DEPLOYING -> OBSERVING -> HEALTHY/DEGRADED/INCONCLUSIVE ->
+PROMOTING/ROLLING_BACK/PAUSED -> COMPLETED/FAILED
+```
+
+as an explicit, exhaustive `allowedTransitions` table (`state.go`) --
+every legal edge is listed, so an illegal transition is rejected outright
+rather than merely unlikely. The table's central safety property (rule 1
+again): the *only* edge leading to `PROMOTING` originates at `HEALTHY`;
+`INCONCLUSIVE` and `DEGRADED` have no direct path to it, which
+`TestAllowedTransitions_OnlyHealthyLeadsToPromoting` checks over every
+table entry, not a spot check. `Rollout` is clock-free -- every method
+that can transition state takes an explicit `now time.Time` rather than
+reading the wall clock, so the exact same code drives an instant
+simulation and a real-time Phase 6 reconcile loop. `RecordWindow` tracks
+independent consecutive-window streaks (healthy/degraded/inconclusive,
+each reset by any other classification) against the policy's configured
+thresholds, and is only callable while the rollout is in an observing
+state -- calling it again after a terminal state is reached is rejected,
+which is what keeps a duplicate/late reconcile from invoking
+`Action.Promote`/`Rollback` a second time (rule 2, idempotency). See
+[ADR 0010](decisions/0010-missing-telemetry-and-pause-semantics.md) for
+`on_missing_telemetry`'s default and what `PAUSED -> COMPLETED` means
+without a human-in-the-loop resume API yet.
+
+`Action` (Promote/Rollback) is the one seam Phase 6's real Kubernetes
+adapter will fill in -- Phase 5 tests it against `NoopAction`,
+`RecordingAction` (call-counting, for idempotency assertions) and
+`FailingAction` (the `Promoting/RollingBack -> Failed` path).
+
+### Audit log (`internal/audit`) -- Phase 5, ADR 0005
+
+Every state transition is one `audit.Event`. `JSONLLogger` appends one
+JSON object per line with an `fsync` after each write (crash-safe by
+construction: a torn write can at worst leave one incomplete trailing
+line, and `ReadJSONL` tolerates exactly that). `InMemoryLogger` backs
+tests. Evidence (the full per-signal `WindowResult`) travels with every
+classification event, not just a bare state name -- this is what actually
+answers FR4's "why did ReleaseGuard make this decision?"
+
+### Scenario runner (`internal/scenario`) + CLI -- ties it together
+
+`scenario.Run` loads a recorded-telemetry fixture (`Tick`s: per-signal
+values for canary and, where needed, stable) and drives a real `Rollout`
+through it window by window, using a real `Evaluator` against a
+per-tick `Fixture` -- the exact same call sequence a live Phase 6 loop
+will make, just with simulated instead of real time and data.
+`controller/scenarios/` holds one fixture per spec §1.8 demo scenario
+(A-E); `controller/internal/scenario/scenario_test.go` runs all five
+against the real default policy and asserts the exact expected decision,
+twice each, to prove determinism. `cmd/controller simulate` is the same
+code path exposed as the "local reproducibility command" Part 4 of the
+spec requires -- see
+[`experiments/raw/phase4-5-scenario-evidence.md`](../experiments/raw/phase4-5-scenario-evidence.md)
+for a real, captured run of all five.
+
+## Kubernetes adapter (Phase 6, not yet built)
+
+The `Action` interface `internal/rollout` already depends on is expected
+to be a thin, idempotent wrapper around patching the stable and canary
+Deployments' replica counts, consistent with the replica-count
+traffic-split design in ADR 0003 -- nothing in Phase 4/5's design should
+need to change to plug it in.

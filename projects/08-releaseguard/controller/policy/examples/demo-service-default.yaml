@@ -1,0 +1,101 @@
+# ReleaseGuard default canary policy for demo-service.
+#
+# DRAFT -- FLAGGED FOR HUMAN REVIEW. Per spec §1.9 ("policy threshold
+# values are human-review decisions") and the Claude Code handoff's
+# kickoff prompt ("flag all policy threshold values for my review before
+# Phase 4 lands"): every number below is a reasonable, defensible starting
+# point derived from demo-service's own configured defaults
+# (BASE_LATENCY_MS=20, LATENCY_JITTER_MS=10, ERROR_RATE=0 -- see
+# demo-service/internal/config/config.go and the README's configuration
+# table), NOT a measured SLO agreed with a real stakeholder. Treat every
+# value in `evaluation:` and every `threshold`/`relative` block below as a
+# placeholder to review, not a finished decision. See
+# docs/slo-policy.md for the full rationale behind each one and the schema
+# this file is validated against (controller/internal/policy).
+#
+# Local reproducibility: `go run ./cmd/controller validate policy/examples/demo-service-default.yaml`
+
+name: demo-service-canary
+version: 1
+
+evaluation:
+  # NEEDS HUMAN REVIEW: cadence the real Phase 6 reconcile loop will use.
+  interval: 15s
+  # NEEDS HUMAN REVIEW: PromQL lookback per evaluation.
+  window: 30s
+
+  # NEEDS HUMAN REVIEW: demo-service's synthetic traffic scripts (Phase 7)
+  # need to sustain at least this many canary requests per window for a
+  # verdict to be trusted at all.
+  min_sample_count: 20
+  sample_count_query: >-
+    sum(increase(http_requests_total{track="{{.Track}}"}[{{.Window}}]))
+
+  # NEEDS HUMAN REVIEW: rollback is deliberately faster to trigger
+  # (2 consecutive bad windows) than promotion is to earn (3 consecutive
+  # good windows) -- a common, defensible real-world asymmetry ("be quick
+  # to protect, slow to commit"), not a value derived from measurement.
+  consecutive_healthy_windows: 3
+  consecutive_unhealthy_windows: 2
+
+  # NEEDS HUMAN REVIEW: how long an observation is allowed to run before
+  # the controller gives up and pauses rather than deciding indefinitely.
+  max_rollout_duration: 30m
+
+  # Not a threshold value, but still a deliberate default worth a human's
+  # sign-off: see docs/decisions/0010-missing-telemetry-and-pause-semantics.md.
+  # "pause" is the safer of the two valid options (never "promote" -- that
+  # option does not exist in the schema).
+  on_missing_telemetry: pause
+
+  baseline_track: stable
+
+signals:
+  # NEEDS HUMAN REVIEW: 2% absolute error-rate ceiling; canary must also
+  # stay within 3x stable's own error rate (ADR 0007: relative guardrails
+  # are additive on top of the absolute threshold, not a replacement).
+  - name: error_rate
+    query: >-
+      sum(rate(http_requests_total{status=~"5..",track="{{.Track}}"}[{{.Window}}]))
+      /
+      sum(rate(http_requests_total{track="{{.Track}}"}[{{.Window}}]))
+    threshold:
+      max: 0.02
+    relative:
+      max_ratio: 3.0
+
+  # NEEDS HUMAN REVIEW: 300ms P95 ceiling (demo-service's baseline is
+  # ~20-30ms unloaded; 300ms leaves generous headroom before flagging a
+  # regression) and canary must stay within 1.5x stable's P95.
+  - name: latency_p95
+    query: >-
+      histogram_quantile(0.95,
+      sum(rate(http_request_duration_seconds_bucket{track="{{.Track}}"}[{{.Window}}])) by (le))
+    threshold:
+      max: 0.3
+    relative:
+      max_ratio: 1.5
+
+  # NEEDS HUMAN REVIEW: looser P99 ceiling (tail latency is expected to be
+  # noisier than P95); no relative guardrail -- P95's relative check is
+  # treated as the primary latency-regression signal.
+  - name: latency_p99
+    query: >-
+      histogram_quantile(0.99,
+      sum(rate(http_request_duration_seconds_bucket{track="{{.Track}}"}[{{.Window}}])) by (le))
+    threshold:
+      max: 0.75
+
+  # NEEDS HUMAN REVIEW: demo-service's simulated downstream dependency
+  # (internal/dependency) failing is this policy's proxy for FR4's
+  # "saturation/resource signal" example -- demo-service does not
+  # currently export a CPU/memory gauge (see docs/slo-policy.md for why),
+  # but dependency-failure rate is a real, already-instrumented signal
+  # distinct from error_rate (work_dependency_failures_total vs. HTTP 5xx).
+  - name: dependency_failure_rate
+    query: >-
+      sum(rate(work_dependency_failures_total{track="{{.Track}}"}[{{.Window}}]))
+      /
+      sum(rate(http_requests_total{route="/work",track="{{.Track}}"}[{{.Window}}]))
+    threshold:
+      max: 0.05

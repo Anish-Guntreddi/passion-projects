@@ -1,0 +1,15 @@
+{
+  "description": "Spec §1.8 scenario C: an injected elevated error rate rolls the canary back. error_rate breaches both its 0.02 absolute threshold and its 3x relative guardrail against stable for consecutive_unhealthy_windows=2 windows in a row.",
+  "ticks": [
+    {
+      "canary": {"error_rate": 0.09, "latency_p95": 0.05, "latency_p99": 0.09, "dependency_failure_rate": 0.02},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.047},
+      "sample_count": 50
+    },
+    {
+      "canary": {"error_rate": 0.11, "latency_p95": 0.052, "latency_p99": 0.095, "dependency_failure_rate": 0.025},
+      "stable": {"error_rate": 0.005, "latency_p95": 0.048},
+      "sample_count": 48
+    }
+  ]
+}

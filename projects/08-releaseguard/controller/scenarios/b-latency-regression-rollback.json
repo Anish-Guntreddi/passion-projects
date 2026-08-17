@@ -1,0 +1,15 @@
+{
+  "description": "Spec §1.8 scenario B: an injected P95/P99 latency regression rolls the canary back. latency_p95 breaches both its 0.3s absolute threshold and its 1.5x relative guardrail against stable for consecutive_unhealthy_windows=2 windows in a row.",
+  "ticks": [
+    {
+      "canary": {"error_rate": 0.004, "latency_p95": 0.62, "latency_p99": 0.91, "dependency_failure_rate": 0.01},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.048},
+      "sample_count": 50
+    },
+    {
+      "canary": {"error_rate": 0.005, "latency_p95": 0.58, "latency_p99": 0.88, "dependency_failure_rate": 0.009},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.046},
+      "sample_count": 55
+    }
+  ]
+}

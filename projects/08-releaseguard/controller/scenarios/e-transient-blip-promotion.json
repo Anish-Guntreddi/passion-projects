@@ -1,0 +1,30 @@
+{
+  "description": "Spec §1.8 scenario E: a brief transient blip does not cause an overreaction. One window (#2) breaches latency_p95, but consecutive_unhealthy_windows=2 is never reached (window #3 recovers before a second consecutive degraded window). The canary goes on to earn 3 fresh consecutive healthy windows (#3-#5) and is promoted -- the single blip is visible in the audit trail but does not roll back a canary that is, overall, healthy.",
+  "ticks": [
+    {
+      "canary": {"error_rate": 0.004, "latency_p95": 0.05, "latency_p99": 0.09, "dependency_failure_rate": 0.01},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.048},
+      "sample_count": 50
+    },
+    {
+      "canary": {"error_rate": 0.005, "latency_p95": 0.55, "latency_p99": 0.7, "dependency_failure_rate": 0.015},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.047},
+      "sample_count": 51
+    },
+    {
+      "canary": {"error_rate": 0.004, "latency_p95": 0.049, "latency_p99": 0.088, "dependency_failure_rate": 0.009},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.046},
+      "sample_count": 53
+    },
+    {
+      "canary": {"error_rate": 0.005, "latency_p95": 0.051, "latency_p99": 0.09, "dependency_failure_rate": 0.011},
+      "stable": {"error_rate": 0.005, "latency_p95": 0.048},
+      "sample_count": 49
+    },
+    {
+      "canary": {"error_rate": 0.004, "latency_p95": 0.05, "latency_p99": 0.087, "dependency_failure_rate": 0.01},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.047},
+      "sample_count": 52
+    }
+  ]
+}

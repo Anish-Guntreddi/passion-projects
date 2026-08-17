@@ -1,0 +1,29 @@
+name: testdata-canary
+version: 1
+evaluation:
+  interval: 15s
+  window: 30s
+  min_sample_count: 20
+  sample_count_query: sum(increase(http_requests_total{track="{{.Track}}"}[{{.Window}}]))
+  consecutive_healthy_windows: 3
+  consecutive_unhealthy_windows: 2
+  max_rollout_duration: 30m
+  on_missing_telemetry: pause
+signals:
+  - name: error_rate
+    query: >-
+      sum(rate(http_requests_total{status=~"5..",track="{{.Track}}"}[{{.Window}}]))
+      /
+      sum(rate(http_requests_total{track="{{.Track}}"}[{{.Window}}]))
+    threshold:
+      max: 0.02
+    relative:
+      max_ratio: 3.0
+  - name: latency_p95
+    query: >-
+      histogram_quantile(0.95,
+      sum(rate(http_request_duration_seconds_bucket{track="{{.Track}}"}[{{.Window}}])) by (le))
+    threshold:
+      max: 0.3
+    relative:
+      max_ratio: 1.5

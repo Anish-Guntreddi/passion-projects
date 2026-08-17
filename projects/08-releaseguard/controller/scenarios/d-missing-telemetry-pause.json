@@ -1,0 +1,13 @@
+{
+  "description": "Spec §1.8 scenario D: missing metrics make the evaluator refuse an unsafe promotion. sample_count is unanswered (simulating Prometheus/OTel pipeline data loss) for consecutive_unhealthy_windows=2 windows in a row; the default policy's on_missing_telemetry=pause means the rollout pauses -- it never promotes on absent evidence (Claude Code handoff rule 1).",
+  "ticks": [
+    {
+      "canary": {},
+      "stable": {}
+    },
+    {
+      "canary": {},
+      "stable": {}
+    }
+  ]
+}

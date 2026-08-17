@@ -1,0 +1,21 @@
+{
+  "name": "testdata-canary-json",
+  "version": 1,
+  "evaluation": {
+    "interval": "15s",
+    "window": "30s",
+    "min_sample_count": 0,
+    "consecutive_healthy_windows": 2,
+    "consecutive_unhealthy_windows": 2,
+    "max_rollout_duration": "10m",
+    "on_missing_telemetry": "rollback",
+    "baseline_track": "stable"
+  },
+  "signals": [
+    {
+      "name": "error_rate",
+      "query": "sum(rate(http_requests_total{status=~\"5..\",track=\"{{.Track}}\"}[{{.Window}}]))",
+      "threshold": { "max": 0.05 }
+    }
+  ]
+}

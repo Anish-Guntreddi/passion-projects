@@ -1,0 +1,20 @@
+{
+  "description": "Spec §1.8 scenario A: a healthy canary is promoted. Every signal stays well within its absolute threshold and close to stable's own value (small relative ratios) for consecutive_healthy_windows=3 windows in a row.",
+  "ticks": [
+    {
+      "canary": {"error_rate": 0.005, "latency_p95": 0.05, "latency_p99": 0.09, "dependency_failure_rate": 0.01},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.045},
+      "sample_count": 50
+    },
+    {
+      "canary": {"error_rate": 0.004, "latency_p95": 0.048, "latency_p99": 0.085, "dependency_failure_rate": 0.008},
+      "stable": {"error_rate": 0.004, "latency_p95": 0.046},
+      "sample_count": 52
+    },
+    {
+      "canary": {"error_rate": 0.006, "latency_p95": 0.052, "latency_p99": 0.095, "dependency_failure_rate": 0.012},
+      "stable": {"error_rate": 0.005, "latency_p95": 0.047},
+      "sample_count": 49
+    }
+  ]
+}
