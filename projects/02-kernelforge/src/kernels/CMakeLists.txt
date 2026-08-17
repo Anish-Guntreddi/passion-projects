@@ -15,6 +15,17 @@ add_library(kf_kernels STATIC
   histogram/histogram_global_atomic.cu
   histogram/histogram_privatized.cu
   histogram/histogram_privatized_coarsened.cu
+  gemm/gemm_naive.cu
+  gemm/gemm_coalesced.cu
+  gemm/gemm_tiled.cu
+  gemm/gemm_register_tiled.cu
+  gemm/gemm_cublas.cu
+  softmax/softmax_naive.cu
+  softmax/softmax_warp_shuffle.cu
+  softmax/softmax_fused_online.cu
+  norm/rmsnorm_naive.cu
+  norm/rmsnorm_warp_shuffle.cu
+  norm/rmsnorm_vectorized.cu
 )
 
 target_include_directories(kf_kernels PUBLIC ${CMAKE_SOURCE_DIR}/src)
@@ -22,6 +33,7 @@ target_include_directories(kf_kernels PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(kf_kernels
   PUBLIC
     CUDA::cudart
+    CUDA::cublas
     kf_common
   PRIVATE
     kf_cuda_options

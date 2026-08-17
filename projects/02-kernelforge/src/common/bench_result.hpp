@@ -59,19 +59,25 @@ struct BenchResult {
   std::string schema_version = "1.0";
 
   // "vector_add" | "saxpy" | "transpose" | "stride_copy" | "reduction" |
-  // "scan" | "histogram" (Phase 2/3 families added by ADR 0011).
+  // "scan" | "histogram" (Phase 2/3 families, ADR 0011) | "gemm" |
+  // "softmax" | "rmsnorm" (Phase 4/5 families, ADR 0012).
   std::string kernel_family;
   std::string variant;       // "v1_naive" | "v2_tiled" | ...
   std::string description;
 
   EnvironmentInfo env;
 
-  std::size_t n = 0; // primary element count (vector length; rows*cols for transpose)
-  int rows = 0;       // transpose only, 0 otherwise
-  int cols = 0;       // transpose only, 0 otherwise
+  std::size_t n = 0; // primary element count (vector length; rows*cols for transpose;
+                      // M*N*K for gemm; rows*cols for softmax/rmsnorm)
+  int rows = 0;       // transpose only, 0 otherwise; ALSO gemm's M and softmax/rmsnorm's
+                       // row (batch) count -- see bench_gemm_main.cpp / bench_softmax_main.cpp
+                       // / bench_rmsnorm_main.cpp for which
+  int cols = 0;       // transpose only, 0 otherwise; ALSO gemm's N and softmax/rmsnorm's
+                       // col (feature/reduction-axis) count -- same caveat as `rows`
   int stride = 0;      // stride_copy only, 0 otherwise
   int num_bins = 0;           // histogram only, 0 otherwise (ADR 0011)
   std::string contention_profile; // histogram only: "uniform" | "skewed"; empty otherwise (ADR 0011)
+  int k = 0;           // gemm only (the shared M x K / K x N inner dimension), 0 otherwise (ADR 0012)
   std::string dtype = "fp32";
 
   int block_dim_x = 0, block_dim_y = 0, block_dim_z = 1;

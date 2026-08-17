@@ -37,10 +37,14 @@ added afterward to close a real gap: the original four-rung ladder's V1
 already combined FR2's "naive global-memory" and "shared-memory" stages
 into one kernel (it used shared memory from the start), so there was no
 preserved baseline demonstrating pure global-memory atomics contention in
-isolation. V0 is that baseline. Its benchmark numbers are collected in a
+isolation. V0 is that baseline. Its benchmark numbers were collected in a
 separate pass (hard constraint 9: separate implementation commits from
-benchmark-result commits) and are not yet in `benchmarks/raw/reduction.jsonl`
-or methodology.md §9.1 as of this rung's introduction.
+benchmark-result commits) and are now in `benchmarks/raw/reduction.jsonl`
+and `benchmarks/methodology.md` §9.1, which also covers a second,
+independent finding from that pass: V0 fails its own correctness gate at
+the ladder's largest benchmarked size (67,108,864) due to fp32
+accumulator saturation, not a logic bug — see §9.1 for the mechanism, and
+"Correctness" below for how the test suite pins this down.
 
 ## Correctness
 
@@ -50,14 +54,23 @@ non-power-of-two n, n exactly one block, n one more/less than a block
 multiple, a large multi-block n, and a block-size sweep (plus a
 non-power-of-two block-size case specific to V0, which — unlike V1-V4 —
 does not require one). See that file for the exact cases and tolerances
-used.
+used. The unit-test sizes deliberately stay at or below 16,777,213 (the
+largest, `2^24 - 3`) — below the point where V0's direct-into-one-fp32-
+scalar accumulation starts to saturate (see `benchmarks/methodology.md`
+§9.1) — so every variant genuinely agrees at every size the unit suite
+exercises. V0's accumulator-saturation failure at 67,108,864 is instead
+pinned down where it was actually discovered: as a benchmark-harness
+correctness-gate rejection (`bench_reduction`'s pre-timing `allclose`
+check), documented in `benchmarks/methodology.md` §9.1 rather than
+silently reproduced as a "passing" unit test with a loosened tolerance,
+which would have hidden a genuine numerical-stability finding instead of
+reporting it.
 
 ## Benchmarks
 
 `benchmarks/configs/reduction.json` sweeps all five variants across the
 same size list; results land in `benchmarks/raw/reduction.jsonl`. See
-`benchmarks/methodology.md` §9 for the as-run numbers (filled in only
-after `scripts/run_all_benchmarks.sh` has actually produced them — hard
-constraint 3: never fabricate a benchmark number). As of V0's introduction,
-its numbers are still pending a dedicated benchmark-collection pass (see
-"Ladder history" above); §9.1 covers V1-V4 only until then.
+`benchmarks/methodology.md` §9.1 for the as-run numbers and their
+interpretation (filled in only after they were actually measured — hard
+constraint 3: never fabricate a benchmark number), including why V0's row
+stops one size short of V1-V4's.

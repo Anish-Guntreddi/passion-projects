@@ -1,0 +1,12 @@
+{
+  "kernel_family": "rmsnorm",
+  "binary": "bench_rmsnorm",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_naive", "v2_warp_shuffle", "v3_vectorized"],
+  "sweep_param": "n",
+  "sweep_values": [128, 512, 768, 1024, 2048, 4096, 8192],
+  "fixed_args": { "rows": 4096, "block-size": 256 },
+  "notes": "Same shape-sweep convention as softmax.json (cols swept across representative transformer hidden/feature-dimension widths at a fixed, representative rows=4096) -- see src/kernels/norm/README.md for what each rung changes. Every swept cols value here is a multiple of 4 (V3's cols%4==0 requirement, common/launch_validate.hpp::validate_cols_multiple_of_4) so all three variants are directly comparable at every point. gamma (per-column learned scale) is random in [0.5,1.5); eps=1e-5 (bench_cli.hpp default)."
+}

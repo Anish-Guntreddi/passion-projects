@@ -23,6 +23,11 @@ struct CliArgs {
   std::string variant = "v1_naive";
   long long n = -1;      // vector_add / saxpy: vector length. transpose: square dim (rows=cols).
                           // reduction/scan: array length. histogram: input length.
+                          // gemm: N (output cols); defaults to --m/--k when either is unset
+                          // (square MxNxK sweep). softmax/rmsnorm: cols (reduction-axis length).
+  long long m = -1;       // gemm only: M (output rows / A's row count). -1 => unset (see bench_gemm_main.cpp).
+  long long k = -1;       // gemm only: K (A's col count / B's row count). -1 => unset.
+  long long rows = -1;    // softmax/rmsnorm only: row (batch) count.
   int stride = -1;       // stride_copy only.
   int warmup_iters = 10; // ADR 0005 default.
   int measured_reps = 30; // ADR 0005 default (>= 20).
@@ -31,6 +36,7 @@ struct CliArgs {
   int num_bins = 256;             // histogram only.
   std::string contention = "uniform"; // histogram only: "uniform" | "skewed" (Phase 3, ADR 0011).
   int coarsen = 8;                // histogram v3_privatized_coarsened only: elements/thread.
+  float eps = 1e-5f;              // rmsnorm only: numerical-stability epsilon added under the sqrt.
 };
 
 inline CliArgs parse_cli(int argc, char** argv) {
@@ -57,6 +63,18 @@ inline CliArgs parse_cli(int argc, char** argv) {
     } else if (auto v = next_value("--n")) {
       args.n = std::atoll(v->c_str());
       consume_if_separate("--n");
+    } else if (auto v = next_value("--m")) {
+      args.m = std::atoll(v->c_str());
+      consume_if_separate("--m");
+    } else if (auto v = next_value("--k")) {
+      args.k = std::atoll(v->c_str());
+      consume_if_separate("--k");
+    } else if (auto v = next_value("--rows")) {
+      args.rows = std::atoll(v->c_str());
+      consume_if_separate("--rows");
+    } else if (auto v = next_value("--eps")) {
+      args.eps = std::strtof(v->c_str(), nullptr);
+      consume_if_separate("--eps");
     } else if (auto v = next_value("--stride")) {
       args.stride = std::atoi(v->c_str());
       consume_if_separate("--stride");

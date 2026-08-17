@@ -1,0 +1,12 @@
+{
+  "kernel_family": "gemm",
+  "binary": "bench_gemm",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_naive", "v2_coalesced", "v3_tiled", "v4_register_tiled", "cublas_sgemm_ceiling"],
+  "sweep_param": "n",
+  "sweep_values": [128, 256, 512, 1024, 2048],
+  "fixed_args": {},
+  "notes": "Square M=N=K=n sweep (bench_gemm_main.cpp defaults M/K to --n when --m/--k are not given), so the whole ladder + the cuBLAS ceiling reference share one problem size per sweep point -- see src/kernels/gemm/README.md for what each rung changes. Input range [-1,1); GEMM-specific correctness tolerance (looser than the repo default -- see apps/bench_gemm_main.cpp's kGemmAtol/kGemmRtol doc comment for why: fp32 accumulation-order variance across the ladder's differently-shaped K-loops, not a bug). cublas_sgemm_ceiling is measured and committed alongside V1-V4 but is NEVER included in the ladder's rung-over-rung speedup arithmetic (spec FR2: 'cuBLAS is a ceiling/reference, never a target to beat') -- see docs/decisions/0013-cublas-ceiling-methodology.md."
+}

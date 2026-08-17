@@ -112,6 +112,38 @@ KF_TEST(Reduction, NaiveGlobalAcceptsNonPow2BlockSize) {
   }
 }
 
+KF_TEST(Reduction, V0FailsCorrectnessAtAccumulatorSaturationSizeButV1DoesNot) {
+  // Pins down the fp32-accumulator-saturation finding documented in
+  // benchmarks/methodology.md sec 9.1: at n=67,108,864, V0's SINGLE global
+  // fp32 accumulator (one atomicAdd per element, ~67M of them) saturates
+  // around 2^24 and never reaches the true sum, while V1's per-block
+  // pre-reduction (each of its far-fewer global atomics adds a
+  // MUCH-larger-magnitude block partial sum, not a single ~0.5-magnitude
+  // element) does not hit the same failure mode at the same n. This is a
+  // regression test for a real, disclosed numerical limitation of V0 -- NOT
+  // a tolerance bug to "fix" by loosening allclose (see reduction/README.md
+  // "Correctness"). Runs once (this size is expensive); every smaller size
+  // is covered by check_size()'s block-size-independent sweep above.
+  using namespace kernelforge::kernels;
+  const std::size_t n = 67'108'864;
+  const std::vector<float> in = kernelforge::make_random_vector(n, kernelforge::kDefaultSeed, 0.0f, 1.0f);
+  const float expected = kernelforge::reference::reduce_sum(in.data(), n);
+
+  float v0 = 0.0f, v1 = 0.0f;
+  reduce_naive_global_run_host(in.data(), n, &v0);
+  reduce_naive_interleaved_run_host(in.data(), n, &v1);
+
+  // V0: NOT allclose to the reference -- the documented saturation.
+  KF_EXPECT_TRUE(!kernelforge::allclose(&v0, &expected, 1).passed);
+  // The saturated value sits close to 2^24 (16,777,216), well below the
+  // true sum (~33.5M for this n and input range) -- a loose sanity bound
+  // on the mechanism itself, not just "not exactly right".
+  KF_EXPECT_TRUE(v0 < 20'000'000.0f);
+  // V1: DOES still agree with the reference at the same n -- its per-block
+  // pre-reduction avoids the failure mode entirely.
+  KF_EXPECT_TRUE(kernelforge::allclose(&v1, &expected, 1).passed);
+}
+
 KF_TEST(Reduction, AllFiveVariantsAgreeOnSameInput) {
   // Redundant with check_size's internal comparison, but stated explicitly
   // since this is the property the whole ladder depends on: all five

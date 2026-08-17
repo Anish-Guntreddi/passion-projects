@@ -259,28 +259,25 @@ additive, backward-compatible changes; `schema_version` stays `"1.0"`.
 
 ### 9.1 Reduction ladder — `benchmarks/raw/reduction.jsonl`
 
-Four variants (`benchmarks/configs/reduction.json`'s originally-collected
-set — V1-V4; the ladder's V0, `v0_naive_global_atomic`, was added to the
-code after this data was collected and is not yet benchmarked, see
-`src/kernels/reduction/README.md`'s "Ladder history" note), same
-sizes/seed, `block-size=256`; see that README for what each rung changes
-and its written hypothesis. `effective_bandwidth_gb_s` (median of 30 reps,
-recomputed directly from the committed `.jsonl` records below — every
-number here must be reproducible with `python3 -c "import json; ...` over
-that file):
+Five variants (`benchmarks/configs/reduction.json`), same sizes/seed,
+`block-size=256`; see `src/kernels/reduction/README.md` for what each rung
+changes and its written hypothesis. `effective_bandwidth_gb_s` (median of
+30 reps, recomputed directly from the committed `.jsonl` records below —
+every number here must be reproducible with `python3 -c "import json;
+..."` over that file):
 
-| n | V1 naive_interleaved | V2 sequential_addressing | V3 warp_shuffle | V4 vectorized_coarsened |
-|---:|---:|---:|---:|---:|
-| 4,096      | 3.2   | 4.0   | 4.0    | 4.0    |
-| 65,536     | 36.6  | 64.0  | 64.0   | 64.0   |
-| 1,048,576  | 292.6 | 409.6 | 409.6  | 819.2  |
-| 4,194,304  | 399.2 | 574.6 | 606.8  | 1638.4 |
-| 16,777,216 | 428.3 | 655.4 | 689.9  | 3440.8 |
-| 67,108,864 | 430.1 | 650.5 | 714.3  | 936.2  |
+| n | V0 naive_global_atomic | V1 naive_interleaved | V2 sequential_addressing | V3 warp_shuffle | V4 vectorized_coarsened |
+|---:|---:|---:|---:|---:|---:|
+| 4,096      | 1.78 | 3.2   | 4.0   | 4.0    | 4.0    |
+| 65,536     | 2.69 | 36.6  | 64.0  | 64.0   | 64.0   |
+| 1,048,576  | 2.85 | 292.6 | 409.6 | 409.6  | 819.2  |
+| 4,194,304  | 2.77 | 399.2 | 574.6 | 606.8  | 1638.4 |
+| 16,777,216 | 2.87 | 428.3 | 655.4 | 689.9  | 3440.8 |
+| 67,108,864 | —    | 430.1 | 650.5 | 714.3  | 936.2  |
 
-At the largest, fully HBM-bound size (67,108,864 elements = 256 MiB, well
-beyond the 72 MiB L2), the ladder is monotonically faster rung over rung:
-**V1→V2 is a 1.51x speedup** (removing interleaved-addressing warp
+At the largest, fully HBM-bound V1-V4 size (67,108,864 elements = 256 MiB,
+well beyond the 72 MiB L2), the ladder is monotonically faster rung over
+rung: **V1→V2 is a 1.51x speedup** (removing interleaved-addressing warp
 divergence, the only variable V2 changes), **V2→V3 is a further 1.10x**
 (warp-shuffle finalization replacing the last 5 shared-memory steps), and
 **V3→V4 is a further 1.31x** (float4 vectorized loads + thread
@@ -296,6 +293,59 @@ consistent with the same phenomenon already documented for `vector_add`/
 not a measurement error; V1-V3 do not show this as strongly at the same
 size because their per-block combine overhead dominates before L2
 bandwidth becomes the bottleneck).
+
+**V0's numbers (backfilled — see `src/kernels/reduction/README.md`'s
+"Ladder history" note for why this rung was added after V1-V4's data was
+already collected) confirm the atomics-contention hypothesis directly, and
+also surface a second, distinct failure mode.** At every size V0 measures,
+its effective bandwidth is nearly flat — **1.78 → 2.69 → 2.85 → 2.77 →
+2.87 GB/s across a 4096x range of n (4,096 to 16,777,216)** — while V1
+(the very next rung, whose only change is introducing a shared-memory
+tree so only `ceil(n/256)` atomics reach global memory instead of `n`)
+climbs from 3.2 to 428.3 GB/s over the same range. The **V1/V0 speedup
+widens monotonically with n: 1.80x → 13.57x → 102.71x → 144.27x → 149.10x**
+— exactly the shape the V0 hypothesis (`reduce_naive_global.cuh`)
+predicted: V0's cost is dominated by every one of its `n` global
+`atomicAdd`s serializing against every other one on the same address, so
+its throughput is essentially independent of `n` (contention-bound, not
+bandwidth-bound), while V1's `ceil(n/256)` atomics leave it free to scale
+with `n` until it too becomes bandwidth-bound. At n=16,777,216, **V4 is
+1197.7x faster than V0** — the full ladder's cumulative payoff over the
+literal "one atomic per element, no shared memory" starting point.
+
+**V0 also fails its own correctness gate at the ladder's largest
+benchmarked size (67,108,864), for a reason that has nothing to do with
+atomics contention: single-precision (fp32) accumulator saturation.**
+`bench_reduction --variant v0_naive_global_atomic --n 67108864` measured
+`actual=1.67772e+07` against a CPU reference of `expected=3.35575e+07`
+(`max_rel_diff=0.50`, i.e. almost exactly half) and `bench_driver.py`
+correctly refused to write that result (hard constraint 1: correctness
+before performance; house rule: a `correctness_passed=false` result is
+never committed). This is **not a logic bug** — `reduce_naive_global_
+kernel`'s one line (`atomicAdd(out, in[i])`) is trivially correct in
+isolation at every individual call — it is the accumulated *sequence* of
+~67 million individual `atomicAdd`s of an O(0.5)-magnitude `float` value
+each, into ONE `float` scalar, that loses information: once the running
+total exceeds 2^24 (16,777,216 — the largest integer an IEEE-754 float32
+mantissa can represent exactly), the accumulator's own ULP grows to ≥2,
+so a further add of ~0.5 frequently rounds away to no change at all. The
+measured `actual` value (16,777,200) sitting almost exactly at that 2^24
+threshold is the signature of this well-known float32 summation-stall
+artifact, not a race condition or off-by-one. **V1-V4 never hit this**,
+even though they too reach the same final magnitude and even though every
+one of them also finishes with a global-scalar atomic-combine step (see
+`src/kernels/reduction/README.md`'s "held constant" note): each of their
+`ceil(n/256)` block-level atomics adds a *pre-reduced, per-block partial
+sum* (magnitude ~128, not ~0.5) into an accumulator whose ULP at the final
+33.5M-ish total is only ~4 — comfortably larger than the increment's own
+precision, but nowhere near stalling it the way V0's direct
+per-element adds do. **V0's benchmark sweep in the table above therefore
+covers only the five sizes at which it passes correctness** (this is a
+second, independent reason — beyond raw contention — that a single global
+fp32 atomic accumulator is not a technique any of this ladder's later
+rungs use for the final combine at scale, and it is disclosed here rather
+than worked around by loosening the tolerance, which would have hidden a
+genuine numerical-stability finding).
 
 ### 9.2 Scan strategies — `benchmarks/raw/scan.jsonl`
 
@@ -389,3 +439,171 @@ integer bin-count match against `kernelforge::reference::histogram` (not
 a tolerance-based comparison — histogram counts are integers), and no
 record with a mismatch was ever written (the benchmark binary refuses to
 emit one, per FR6).
+
+## 11. Phase 4 results — GEMM ladder
+
+Schema note: `gemm` was added to `kernel_family`, and one new field (`k`,
+GEMM's shared inner dimension; `rows`/`cols` are reused for M/N) was added
+to `BenchResult`, by ADR 0012 — additive, backward-compatible;
+`schema_version` stays `"1.0"`. `docs/decisions/
+0013-cublas-ceiling-methodology.md` covers the cuBLAS invocation and
+ceiling-not-rung methodology.
+
+`benchmarks/configs/gemm.json` sweeps V1-V4 plus the `cublas_sgemm_ceiling`
+reference across a square M=N=K sweep (`benchmarks/raw/gemm.jsonl`, 25
+records, every one `correctness_passed: true`; see
+`src/kernels/gemm/README.md` for what each rung changes). GFLOP/s (`2 *
+M*N*K / median_ms`, median of 30 reps, recomputed directly from the
+committed `.jsonl` records — every number here is reproducible with
+`python3 -c "import json; ..."` over that file):
+
+| M=N=K | V1 naive | V2 coalesced | V3 tiled | V4 register_tiled | cuBLAS (ceiling) |
+|---:|---:|---:|---:|---:|---:|
+| 128  | 71.9   | 409.6  | 459.1  | 275.9   | 680.9   |
+| 256  | 297.9  | 2048.0 | 2340.6 | 1310.7  | 3640.9  |
+| 512  | 611.1  | 4681.1 | 5618.6 | 5269.2  | 18724.6 |
+| 1024 | 617.1  | 5041.2 | 6179.2 | 15196.8 | 45870.7 |
+| 2048 | 617.8  | 5105.1 | 6224.9 | 16571.1 | 53773.1 |
+
+At the largest size (2048x2048x2048), the ladder is monotonically faster
+rung over rung: **V1→V2 is an 8.26x speedup** (fixing the row/col
+↔ `threadIdx.x/y` mapping — the ONLY variable V2 changes — turns A's
+badly-uncoalesced reads and C's badly-uncoalesced writes into a
+warp-uniform broadcast and a fully coalesced write, respectively), **V2→V3
+is a further 1.22x** (shared-memory tiling, cutting global reads from
+`2*TILE²*K` to `2*TILE*K` per output tile), and **V3→V4 is a further
+2.66x** (register tiling: each thread now reuses its shared-memory B read
+across 8 output rows instead of 8 different threads each re-reading it
+once), for a **26.8x V1→V4 speedup overall (617.8 → 16,571.1 GFLOP/s)** —
+one variable changed per rung, all five variants (V1-V4 + cuBLAS)
+numerically agree with `reference::gemm` at every tested shape (hard
+constraint 1). At this size, **V4 reaches 30.8% of cuBLAS's measured
+throughput** (16,571.1 / 53,773.1 GFLOP/s) — reported as exactly that
+framing, never as "V4 is only 3.2x slower than cuBLAS" (spec FR2: cuBLAS
+is a ceiling/reference, never a target to beat; see
+`docs/decisions/0013-cublas-ceiling-methodology.md`).
+
+**V3→V4's speedup is NOT monotonic across sizes — it is a genuine
+regression at the two smallest sizes, matching a caveat the hypothesis in
+`gemm_register_tiled.cuh` stated explicitly before this data existed**
+("expect a further speedup... at every size where V3 was already
+shared-memory-bandwidth-limited rather than occupancy-limited"):
+
+| M=N=K | V3→V4 ratio | V4 grid (blocks) |
+|---:|---:|---:|
+| 128  | **0.60x (V4 is 40% SLOWER)** | 2×2 = 4 |
+| 256  | **0.56x (V4 is 44% SLOWER)** | 4×4 = 16 |
+| 512  | 0.94x (roughly level) | 8×8 = 64 |
+| 1024 | 2.46x | 16×16 = 256 |
+| 2048 | 2.66x | 32×32 = 1024 |
+
+V4's 64×64 block tile means its grid is `⌈N/64⌉ × ⌈M/64⌉` blocks — at
+128×128 that is only **4 blocks total** against this GPU's 128 SMs
+(docs/gpu-model.md): at most 4 SMs can even be active, ~3% occupancy, so
+the kernel is occupancy-bound and the extra per-thread register/shared-
+memory setup register tiling adds is pure overhead with no reuse benefit
+to amortize it against. By 1024×1024 (256 blocks) there is enough grid
+parallelism to saturate the GPU and the register-reuse mechanism the
+hypothesis predicted takes over decisively. This is reported as measured,
+confirming (not falsifying) the hypothesis's own stated caveat — a case
+where the *first* guess already correctly anticipated the nuance the data
+would show.
+
+## 12. Phase 5 results — Softmax ladder
+
+Schema note: `softmax` and `rmsnorm` were added to `kernel_family` by ADR
+0012 (no new fields needed — both reuse `rows`/`cols`, already present for
+`transpose`/`gemm`).
+
+`benchmarks/configs/softmax.json` sweeps V1-V3 across representative
+transformer hidden-dimension widths (`cols`, `rows=4096` fixed;
+`benchmarks/raw/softmax.jsonl`, 21 records, all `correctness_passed:
+true`; see `src/kernels/softmax/README.md`). Median of 30 reps
+(recomputed from the committed `.jsonl`):
+
+| cols | V1 naive (ms) | V2 warp_shuffle (ms) | V3 fused_online (ms) | V1→V2 | V2→V3 |
+|---:|---:|---:|---:|---:|---:|
+| 128  | 0.0171 | 0.0113 | 0.0113 | 1.51x | 0.99x |
+| 512  | 0.0195 | 0.0143 | 0.0161 | 1.36x | 0.89x |
+| 768  | 0.0215 | 0.0174 | 0.0184 | 1.24x | 0.94x |
+| 1024 | 0.0222 | 0.0164 | 0.0184 | 1.35x | 0.89x |
+| 2048 | 0.0307 | 0.0275 | 0.0266 | 1.12x | 1.03x |
+| 4096 | 0.1505 | 0.1504 | 0.1505 | 1.00x | 1.00x |
+| 8192 | 0.3123 | 0.3174 | 0.3215 | 0.98x | 0.99x |
+
+**V1→V2 (reduction mechanism) shows a real, consistent win at small-to-
+medium `cols` — up to 1.51x at cols=128 — that shrinks smoothly to
+parity by cols=4096-8192** (0.98x-1.00x): warp-shuffle removes
+`log2(block_size)` `__syncthreads()` rounds down to 2 regardless of
+`block_size`, a fixed-overhead saving whose share of total kernel time
+naturally shrinks as `cols` (and therefore per-thread work and total
+memory traffic) grows. This matches the hypothesis in
+`softmax_warp_shuffle.cuh` in direction, though the hypothesis did not
+predict the win would fully vanish by the two largest sizes tested — an
+honest refinement, not a contradiction.
+
+**V2→V3 (the "bounded fusion" rung) does NOT show a consistent win: at
+six of the seven sizes tested (all except cols=2048, where V3 is 3.1%
+faster) V3 is the same speed or measurably SLOWER than V2** (128: 0.7%
+slower; 512: 12.5% slower; 768: 5.9% slower; 1024: 12.3% slower; 4096:
+0.1% slower — essentially exact parity; 8192: 1.3% slower; all
+percentages relative to the V2 baseline) — this
+contradicts the hypothesis written in
+`softmax_fused_online.cuh` before this data existed ("expect roughly a
+1/3 reduction in this kernel's global-memory read traffic... and a real
+... speedup"), reported here as measured rather than adjusted after the
+fact (`docs/optimization-method.md` step 6). A plausible mechanism (not
+confirmed with Nsight Compute, which is not installed on this machine as
+of 2026-08-17 — see `docs/gpu-model.md`): V3's per-element online-combine
+(`l = l*expf(m-m_new) + expf(x-m_new)`) issues **two** `expf()` calls per
+element folded into the running (max, sum) pair, whereas V1/V2's two
+SEPARATE passes issue only **one** `expf()` call per element in total
+across both passes (the max-only pass uses just `fmaxf`, not `expf`) —
+V3 trades one fewer global-memory PASS for one MORE transcendental-unit
+call per element, and at these row sizes that tradeoff is a wash or a
+narrow net loss rather than the assumed win. This is consistent with
+`cols=4096`/`8192`'s near-identical wall-clock time across all THREE
+variants despite their different pass counts — at that scale the kernel
+appears bandwidth-bound on total row traffic in a way that does not
+distinguish 2 passes from 3 (plausibly because a single ≤32 KiB row stays
+L1/L2-resident across one kernel invocation's own immediately-repeated
+passes over it, so "fewer passes" saves compute more than it saves actual
+DRAM traffic) — an interpretation to verify with profiler evidence later,
+not a settled explanation, same disclosure standard as §10's histogram
+V2 finding above.
+
+## 13. Phase 5 results — RMSNorm ladder
+
+`benchmarks/configs/rmsnorm.json` sweeps V1-V3 across the same
+representative-shape convention as softmax (`benchmarks/raw/
+rmsnorm.jsonl`, 21 records, all `correctness_passed: true`; see
+`src/kernels/norm/README.md`). Median of 30 reps:
+
+| cols | V1 naive (ms) | V2 warp_shuffle (ms) | V3 vectorized (ms) | V1→V2 | V2→V3 |
+|---:|---:|---:|---:|---:|---:|
+| 128  | 0.0113 | 0.0082 | 0.0082 | 1.38x | 1.00x |
+| 512  | 0.0134 | 0.0112 | 0.0096 | 1.19x | 1.17x |
+| 768  | 0.0154 | 0.0132 | 0.0111 | 1.16x | 1.19x |
+| 1024 | 0.0152 | 0.0133 | 0.0133 | 1.15x | 1.00x |
+| 2048 | 0.0252 | 0.0246 | 0.0244 | 1.03x | 1.01x |
+| 4096 | 0.1500 | 0.1505 | 0.1484 | 1.00x | 1.01x |
+| 8192 | 0.3226 | 0.3226 | 0.3287 | 1.00x | 0.98x |
+
+**V1→V2 shows the identical pattern softmax's V1→V2 did** (real win at
+small-medium `cols`, up to 1.38x at cols=128, fading to parity by
+cols=2048-8192) — the same fixed-`__syncthreads()`-count mechanism,
+independently confirmed on a second, differently-shaped kernel family.
+
+**V2→V3 (vectorized `float4` loads) shows a real, if narrower-window,
+win than softmax's fusion rung did**: 14.5-16.2% faster at cols=512/768
+(relative to the V2 baseline), roughly level at 128/1024/2048/4096, and a
+small (1.9%) regression at cols=8192. Unlike softmax's V3, this rung's mechanism (wider memory
+transactions, not fewer passes) matches the hypothesis in
+`rmsnorm_vectorized.cuh` at the sizes where it wins, though — same honest
+disclosure — it does not win everywhere the hypothesis's "expect a
+further speedup... growing with `cols`" framing implied, and the largest
+size measured is a narrow loss rather than the largest win. **V1→V3
+overall peaks at cols=512 (1.39x, with cols=768 essentially tied at
+1.38x) and narrows to a small loss (0.98x) by cols=8192** — the full
+ladder's net benefit is real but concentrated in the small-to-medium
+shape range this sweep covers, not uniform across it.

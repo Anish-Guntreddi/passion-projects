@@ -1,0 +1,12 @@
+{
+  "kernel_family": "softmax",
+  "binary": "bench_softmax",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_naive", "v2_warp_shuffle", "v3_fused_online"],
+  "sweep_param": "n",
+  "sweep_values": [128, 512, 768, 1024, 2048, 4096, 8192],
+  "fixed_args": { "rows": 4096, "block-size": 256 },
+  "notes": "Sweeps cols (n) -- representative transformer hidden/feature-dimension widths (BERT-base 768 through 8192-class large-model widths) -- at a fixed, representative rows=4096 (a plausible batch*seq_len row count), per spec exit criterion 'benchmarks across representative tensor shapes'. Input range [-10,10) (see apps/bench_softmax_main.cpp's comment on why -- exercises real numerical-stability headroom without being adversarial); see src/kernels/softmax/README.md for what each rung changes. bytes_moved (and therefore effective_bandwidth_gb_s) differs by variant (V1/V2: 3 read passes + 1 write; V3: 2 read passes + 1 write) -- computed per-variant in bench_softmax_main.cpp, not one shared formula."
+}

@@ -13,7 +13,7 @@
   ],
   "properties": {
     "schema_version": { "type": "string", "const": "1.0" },
-    "kernel_family": { "type": "string", "enum": ["vector_add", "saxpy", "transpose", "stride_copy", "reduction", "scan", "histogram"] },
+    "kernel_family": { "type": "string", "enum": ["vector_add", "saxpy", "transpose", "stride_copy", "reduction", "scan", "histogram", "gemm", "softmax", "rmsnorm"] },
     "variant": { "type": "string" },
     "description": { "type": "string" },
     "env": {
@@ -51,6 +51,7 @@
     "stride": { "type": "integer", "minimum": 0 },
     "num_bins": { "type": "integer", "minimum": 0, "description": "histogram only (ADR 0011); 0 for every other kernel_family." },
     "contention_profile": { "type": "string", "description": "histogram only (ADR 0011): 'uniform' (low contention) or 'skewed' (high contention); empty string for every other kernel_family." },
+    "k": { "type": "integer", "minimum": 0, "description": "gemm only (ADR 0012): the shared M x K / K x N inner dimension (rows/cols carry M/N for gemm); 0 for every other kernel_family." },
     "dtype": { "type": "string", "const": "fp32" },
     "launch_config": {
       "type": "object",

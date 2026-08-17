@@ -11,6 +11,9 @@ add_executable(kf_tests
   test_reduction.cpp
   test_scan.cpp
   test_histogram.cpp
+  test_gemm.cpp
+  test_softmax.cpp
+  test_rmsnorm.cpp
 )
 
 target_include_directories(kf_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/apps)

@@ -188,6 +188,7 @@ std::string to_json(const BenchResult& r) {
   oss << "\"stride\":" << r.stride << ",";
   oss << "\"num_bins\":" << r.num_bins << ",";
   oss << "\"contention_profile\":" << json_str(r.contention_profile) << ",";
+  oss << "\"k\":" << r.k << ",";
   oss << "\"dtype\":" << json_str(r.dtype) << ",";
 
   oss << "\"launch_config\":{";

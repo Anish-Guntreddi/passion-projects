@@ -63,4 +63,28 @@ inline void validate_block_size_pow2_1d(int block_size, const char* launcher_nam
   }
 }
 
+// Phase 5 (rmsnorm_vectorized): a float4-vectorized per-row kernel reads
+// `cols` elements as `cols/4` float4 groups. cudaMalloc's device
+// allocations are guaranteed aligned to at least 256 bytes (far more than
+// float4's 16-byte requirement), so row 0 is always safe to
+// reinterpret_cast to `const float4*` -- but row r's start is `r * cols`
+// floats past the base pointer, and reinterpret_cast<const float4*> of a
+// misaligned address is undefined behavior. If `cols` is not itself a
+// multiple of 4, `r * cols` is a multiple of 4 only for SOME values of r
+// (whichever ones happen to make the product divide evenly), silently
+// producing misaligned float4 accesses for every other row. Rather than
+// add a scalar-fallback path for the general case (real transformer
+// hidden dims are essentially always multiples of 4, usually multiples of
+// 128), this kernel family requires `cols % 4 == 0` and fails loudly
+// (hard constraint 8) instead of risking a silent misaligned access on
+// rows this validator would otherwise let through.
+inline void validate_cols_multiple_of_4(int cols, const char* launcher_name) {
+  if (cols % 4 != 0) {
+    throw std::invalid_argument(
+        std::string(launcher_name) + ": cols (" + std::to_string(cols) +
+        ") must be a multiple of 4 -- every row must start 16-byte-aligned for this "
+        "kernel's float4 loads (see this function's doc comment).");
+  }
+}
+
 } // namespace kernelforge

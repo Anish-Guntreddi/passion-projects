@@ -28,6 +28,25 @@ def main() -> int:
     parser.add_argument("--config", required=True, help="benchmarks/configs/*.json sweep spec")
     parser.add_argument("--bin-dir", required=True, help="directory containing the built bench_* binaries")
     parser.add_argument("--out", required=True, help="benchmarks/raw/<family>.jsonl to append to")
+    parser.add_argument(
+        "--only-variant",
+        action="append",
+        default=None,
+        help="restrict this run to one of the config's variants (repeatable). Used for "
+        "backfilling a single variant's numbers (e.g. a rung added to a ladder after the "
+        "rest was already benchmarked) without re-running -- and re-appending duplicate "
+        "records for -- every other variant already committed to the same .jsonl.",
+    )
+    parser.add_argument(
+        "--only-sweep-value",
+        action="append",
+        default=None,
+        help="restrict this run to one of the config's sweep_values (repeatable, matched by "
+        "str(value)). Used the same way as --only-variant, but for excluding a specific "
+        "swept size -- e.g. one that genuinely fails a variant's correctness gate at that "
+        "scale (never committed, per house rule) while every other configured size for "
+        "that variant is still collected with the same fixed methodology.",
+    )
     args = parser.parse_args()
 
     config_path = pathlib.Path(args.config)
@@ -42,8 +61,29 @@ def main() -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     variants = cfg["variants"]
+    if args.only_variant:
+        unknown = [v for v in args.only_variant if v not in variants]
+        if unknown:
+            print(
+                f"error: --only-variant {unknown} not present in {config_path}'s "
+                f"variants list {variants}",
+                file=sys.stderr,
+            )
+            return 1
+        variants = [v for v in variants if v in args.only_variant]
     sweep_param = cfg["sweep_param"]
     sweep_values = cfg["sweep_values"]
+    if args.only_sweep_value:
+        wanted = set(args.only_sweep_value)
+        unknown = [v for v in wanted if str(v) not in {str(sv) for sv in sweep_values}]
+        if unknown:
+            print(
+                f"error: --only-sweep-value {unknown} not present in {config_path}'s "
+                f"sweep_values list {sweep_values}",
+                file=sys.stderr,
+            )
+            return 1
+        sweep_values = [sv for sv in sweep_values if str(sv) in wanted]
     warmup = cfg.get("warmup_iters", 10)
     reps = cfg.get("measured_reps", 30)
     seed = cfg.get("seed", 123456789)
