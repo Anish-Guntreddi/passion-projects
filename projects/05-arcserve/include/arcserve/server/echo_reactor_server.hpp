@@ -42,6 +42,12 @@ class EchoReactorServer {
     std::uint16_t port = 0;  // 0 = kernel-assigned ephemeral port
     int backlog = 128;
     std::size_t read_chunk_bytes = 8192;
+    // Per-connection buffer caps (spec decision D3 — see
+    // docs/decisions/0006-buffer-representation.md). Defaults match
+    // reactor::Connection's own defaults; overridable here so a caller
+    // (e.g. a saturation test) can force the bound to bite deliberately.
+    std::size_t max_output_queue_bytes = reactor::kDefaultMaxOutputQueueBytes;
+    std::size_t max_read_buffer_bytes = reactor::kDefaultMaxReadBufferBytes;
   };
 
   explicit EchoReactorServer(Config config);
@@ -71,12 +77,9 @@ class EchoReactorServer {
   }
 
  private:
-  enum class FlushResult { kFlushed, kPending, kFailed };
-
   void on_listener_readable(int fd, std::uint32_t events);
   void on_client_event(int fd, std::uint32_t events);
   void process_readable(reactor::Connection& conn);
-  FlushResult try_flush(reactor::Connection& conn);
   void close_connection(int fd) noexcept;
 
   net::TcpListener listener_;

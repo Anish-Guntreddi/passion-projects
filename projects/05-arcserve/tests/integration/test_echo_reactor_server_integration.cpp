@@ -169,6 +169,56 @@ TEST(EchoReactorServerIntegrationTest, LargeTransferDoesNotBlockOtherClients) {
   reader.join();
 }
 
+// Phase 4 exit criterion companion: the bounded output queue
+// (docs/decisions/0006-buffer-representation.md) must actually bite — a
+// peer that sends far more than a small, deliberately configured
+// max_output_queue_bytes cap without ever reading its own echoed bytes
+// back gets its connection closed predictably (bounded memory over
+// best-effort echo), rather than the server growing an unbounded buffer
+// for it. The server itself must stay fully healthy for every other
+// connection afterward.
+TEST(EchoReactorServerIntegrationTest, OutputQueueOverflowClosesConnectionAndServerSurvives) {
+  EchoReactorServer::Config config;
+  config.port = 0;
+  config.max_output_queue_bytes = 1024;  // read_buffer keeps its generous default cap, so
+                                           // this test specifically exercises the output
+                                           // queue's bound, not the read buffer's.
+  EchoReactorServer server(config);
+  std::thread thread([&server] { server.run(); });
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+  {
+    RawTcpClient client(server.port());
+    // Sent, never read back: the server's echoed bytes pile up in its
+    // output queue with nowhere to go, past the 1 KiB cap, well before
+    // this loopback send would itself block.
+    std::string payload(256 * 1024, 'x');
+    client.send_fragmented(payload);  // return value ignored: an ECONNRESET
+                                        // once the server closes is an
+                                        // acceptable, not-a-test-failure
+                                        // outcome of the send race here.
+    std::string trailing;
+    for (int i = 0; i < 200 && !client.is_closed(); ++i) {
+      trailing += client.read_chunk();
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_TRUE(client.is_closed()) << "the overflowing connection must be closed, not left open "
+                                        "buffering without bound";
+  }
+
+  RawTcpClient next(server.port());
+  const std::string message = "still alive after overflow";
+  ASSERT_TRUE(next.send_fragmented(message));
+  std::string echoed;
+  while (echoed.size() < message.size() && !next.is_closed()) {
+    echoed += next.read_chunk();
+  }
+  EXPECT_EQ(echoed, message);
+
+  server.stop();
+  thread.join();
+}
+
 // Phase 2 exit criterion: "echo under many connections" / "stress test
 // passes". Correctness (every one of N concurrent clients gets exactly its
 // own bytes back, no cross-talk) is the primary assertion; the bounded

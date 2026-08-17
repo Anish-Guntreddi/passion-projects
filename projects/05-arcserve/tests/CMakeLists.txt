@@ -7,13 +7,17 @@ target_include_directories(arcserve_test_support PUBLIC support)
 target_link_libraries(arcserve_test_support PUBLIC arcserve_core)
 
 add_executable(arcserve_unit_tests
+  unit/test_bounded_work_queue.cpp
+  unit/test_byte_buffer.cpp
   unit/test_cli.cpp
   unit/test_connection.cpp
   unit/test_epoll_reactor.cpp
   unit/test_file_descriptor.cpp
   unit/test_http_message.cpp
   unit/test_http_parser.cpp
+  unit/test_output_queue.cpp
   unit/test_socket.cpp
+  unit/test_worker_pool.cpp
 )
 target_link_libraries(arcserve_unit_tests PRIVATE
   arcserve_core
@@ -25,6 +29,7 @@ add_executable(arcserve_integration_tests
   integration/test_blocking_server_integration.cpp
   integration/test_echo_reactor_server_integration.cpp
   integration/test_nonblocking_http_server_integration.cpp
+  integration/test_worker_dispatch_integration.cpp
 )
 target_link_libraries(arcserve_integration_tests PRIVATE
   arcserve_core

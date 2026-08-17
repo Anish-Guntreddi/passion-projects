@@ -34,7 +34,9 @@ void EchoReactorServer::on_listener_readable(int /*fd*/, std::uint32_t /*events*
 
     int client_fd = client->get();
     std::string peer = net::describe_peer(client_fd);
-    auto connection = std::make_unique<reactor::Connection>(std::move(*client), std::move(peer));
+    auto connection = std::make_unique<reactor::Connection>(
+        std::move(*client), std::move(peer), config_.max_output_queue_bytes,
+        config_.max_read_buffer_bytes);
     connections_.emplace(client_fd, std::move(connection));
     connections_accepted_.fetch_add(1, std::memory_order_relaxed);
 
@@ -56,12 +58,12 @@ void EchoReactorServer::on_client_event(int fd, std::uint32_t events) {
   }
 
   if ((events & reactor::kWritable) != 0) {
-    FlushResult result = try_flush(conn);
-    if (result == FlushResult::kFailed) {
+    reactor::FlushResult result = conn.flush_output();
+    if (result == reactor::FlushResult::kFailed) {
       close_connection(fd);
       return;
     }
-    if (result == FlushResult::kFlushed) {
+    if (result == reactor::FlushResult::kFlushed) {
       conn.set_state(reactor::ConnectionState::kReading);
       reactor_.modify(fd, reactor::kReadable);
     }
@@ -83,7 +85,17 @@ void EchoReactorServer::process_readable(reactor::Connection& conn) {
   for (;;) {
     net::IoResult result = net::read_some(conn.fd(), buffer.data(), buffer.size());
     if (result.bytes_transferred > 0) {
-      conn.read_buffer.append(buffer.data(), result.bytes_transferred);
+      if (!conn.read_buffer.append(buffer.data(), result.bytes_transferred)) {
+        // read_buffer's own cap (docs/decisions/0006) was hit — an extreme
+        // case in practice (it would take a burst larger than
+        // kDefaultMaxReadBufferBytes arriving before this connection's
+        // output queue ever got a chance to drain any of it), handled the
+        // same way as any other resource exhaustion this codebase
+        // encounters: close predictably rather than grow past the
+        // configured bound.
+        close_connection(conn.fd());
+        return;
+      }
       conn.touch();
     }
     if (result.status == net::IoStatus::Closed || result.status == net::IoStatus::Error) {
@@ -105,36 +117,27 @@ void EchoReactorServer::process_readable(reactor::Connection& conn) {
              // harmless if it does).
   }
 
-  conn.write_buffer += conn.read_buffer;
-  conn.read_buffer.clear();
-
-  FlushResult flush_result = try_flush(conn);
-  if (flush_result == FlushResult::kFailed) {
+  if (!conn.enqueue_output(conn.read_buffer.view())) {
+    // The output queue is already at capacity (docs/decisions/0006): this
+    // peer is sending faster than it is draining its own echoed bytes
+    // back. Bounded memory over best-effort echo, exactly like the
+    // read_buffer overflow above.
     close_connection(conn.fd());
     return;
   }
-  if (flush_result == FlushResult::kPending) {
+  conn.read_buffer.clear();
+
+  reactor::FlushResult flush_result = conn.flush_output();
+  if (flush_result == reactor::FlushResult::kFailed) {
+    close_connection(conn.fd());
+    return;
+  }
+  if (flush_result == reactor::FlushResult::kPending) {
     // Pause reading until the echo fully drains — see
     // docs/decisions/0005-reactor-connection-model.md decision 3 for why.
     conn.set_state(reactor::ConnectionState::kWriting);
     reactor_.modify(conn.fd(), reactor::kWritable);
   }
-}
-
-EchoReactorServer::FlushResult EchoReactorServer::try_flush(reactor::Connection& conn) {
-  if (conn.write_buffer.empty()) {
-    return FlushResult::kFlushed;
-  }
-  net::IoResult result =
-      net::write_all(conn.fd(), conn.write_buffer.data(), conn.write_buffer.size());
-  conn.write_buffer.erase(0, result.bytes_transferred);
-  if (result.status == net::IoStatus::Closed || result.status == net::IoStatus::Error) {
-    return FlushResult::kFailed;
-  }
-  if (result.bytes_transferred > 0) {
-    conn.touch();
-  }
-  return conn.write_buffer.empty() ? FlushResult::kFlushed : FlushResult::kPending;
 }
 
 void EchoReactorServer::close_connection(int fd) noexcept {

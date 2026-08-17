@@ -27,8 +27,10 @@ namespace arcserve::server {
 // this class did not invent.
 class HttpConnection {
  public:
-  HttpConnection(net::FileDescriptor fd, std::string peer) noexcept
-      : base(std::move(fd), std::move(peer)) {}
+  HttpConnection(net::FileDescriptor fd, std::string peer,
+                 std::size_t max_output_queue_bytes = reactor::kDefaultMaxOutputQueueBytes,
+                 std::size_t max_read_buffer_bytes = reactor::kDefaultMaxReadBufferBytes) noexcept
+      : base(std::move(fd), std::move(peer), max_output_queue_bytes, max_read_buffer_bytes) {}
 
   HttpConnection(const HttpConnection&) = delete;
   HttpConnection& operator=(const HttpConnection&) = delete;
@@ -39,6 +41,14 @@ class HttpConnection {
   reactor::Connection base;
   protocol::HttpRequestParser parser;
   std::size_t requests_served = 0;
+  // Phase 5: true from the moment a request is handed to a
+  // concurrency::WorkerPool until its response is delivered back (see
+  // NonblockingHttpServer::on_worker_result). While true, drive_parser()
+  // must not run again on this connection — see
+  // NonblockingHttpServer's "Worker-pool dispatch mode" docs for why (HTTP
+  // response ordering on a pipelined connection). Always false when no
+  // worker pool is configured.
+  bool awaiting_worker_result = false;
 };
 
 }  // namespace arcserve::server

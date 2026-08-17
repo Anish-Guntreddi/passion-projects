@@ -42,10 +42,15 @@ arcserve_enable_sanitizers(arcserve_sanitizers)
 # the exact same translation units.
 add_library(arcserve_core
   src/app/cli.cpp
+  src/buffers/byte_buffer.cpp
+  src/concurrency/bounded_work_queue.cpp
+  src/concurrency/worker_pool.cpp
   src/net/socket.cpp
   src/protocol/http_message.cpp
   src/protocol/http_parser.cpp
+  src/reactor/connection.cpp
   src/reactor/epoll_reactor.cpp
+  src/reactor/output_queue.cpp
   src/server/blocking_server.cpp
   src/server/default_handlers.cpp
   src/server/echo_reactor_server.cpp

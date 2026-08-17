@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -16,6 +17,18 @@ namespace arcserve::testing {
 class RawTcpClient {
  public:
   explicit RawTcpClient(std::uint16_t port);
+
+  // `recv_timeout`: when nonzero, applies SO_RCVTIMEO so read_chunk() never
+  // blocks longer than this per call (a timed-out read_chunk() returns ""
+  // with is_closed() still false — indistinguishable from a genuine
+  // zero-byte WouldBlock, by design: callers that opt into a timeout are
+  // expected to bound their own overall wait, e.g. with a deadline loop,
+  // not to treat one timed-out read as "the peer closed"). Exists so a
+  // regression test for a hang/stranding bug fails promptly instead of
+  // blocking the whole test binary indefinitely if the regression
+  // reappears. Every other caller passes the default (no timeout, the
+  // original blocking-forever behavior every existing test relies on).
+  RawTcpClient(std::uint16_t port, std::chrono::milliseconds recv_timeout);
 
   RawTcpClient(const RawTcpClient&) = delete;
   RawTcpClient& operator=(const RawTcpClient&) = delete;

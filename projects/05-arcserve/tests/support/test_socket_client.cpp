@@ -1,7 +1,13 @@
 #include "test_socket_client.hpp"
 
+#include <sys/socket.h>
+#include <sys/time.h>
+
 #include <algorithm>
+#include <cerrno>
 #include <charconv>
+#include <cstring>
+#include <stdexcept>
 #include <vector>
 
 #include "arcserve/net/socket.hpp"
@@ -9,6 +15,21 @@
 namespace arcserve::testing {
 
 RawTcpClient::RawTcpClient(std::uint16_t port) : fd_(net::connect_loopback(port)) {}
+
+RawTcpClient::RawTcpClient(std::uint16_t port, std::chrono::milliseconds recv_timeout)
+    : fd_(net::connect_loopback(port)) {
+  if (recv_timeout.count() <= 0) {
+    return;
+  }
+  auto seconds = std::chrono::duration_cast<std::chrono::seconds>(recv_timeout);
+  auto micros = std::chrono::duration_cast<std::chrono::microseconds>(recv_timeout - seconds);
+  timeval tv{};
+  tv.tv_sec = static_cast<decltype(tv.tv_sec)>(seconds.count());
+  tv.tv_usec = static_cast<decltype(tv.tv_usec)>(micros.count());
+  if (::setsockopt(fd_.get(), SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) != 0) {
+    throw std::runtime_error(std::string("setsockopt(SO_RCVTIMEO) failed: ") + std::strerror(errno));
+  }
+}
 
 bool RawTcpClient::send_fragmented(std::string_view data, std::size_t chunk_size) {
   if (data.empty()) {

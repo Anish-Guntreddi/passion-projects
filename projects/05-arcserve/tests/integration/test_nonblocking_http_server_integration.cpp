@@ -117,7 +117,7 @@ std::pair<std::string, std::string> read_two_http_responses(RawTcpClient& client
 // A throttled sibling of arcserve::testing::read_one_http_response: reads
 // in small chunks with a short sleep between each recv(2) instead of
 // draining as fast as possible. This is what actually exercises
-// NonblockingHttpServer::try_flush()'s EPOLLOUT re-arm/drain path
+// reactor::Connection::flush_output()'s EPOLLOUT re-arm/drain path
 // (ConnectionState::kWriting/kClosing): every other test in this file uses
 // a response small enough to complete in a single send(2) call, so relying
 // on payload size alone against OS socket buffers of unknown size (as
@@ -315,7 +315,7 @@ TEST(NonblockingHttpServerIntegrationTest, PipelinedRequestsInOneWriteBothGetCor
   EXPECT_NE(second.find("HTTP/1.1 404 Not Found"), std::string::npos);
 }
 
-// try_flush()'s EPOLLOUT re-arm/drain path (the response didn't fit in one
+// flush_output()'s EPOLLOUT re-arm/drain path (the response didn't fit in one
 // send(2) call) has zero coverage elsewhere in this file: every other test
 // here uses a request/response small enough to complete in a single
 // send(2), so drive_parser()'s "kPending" branch and
@@ -356,7 +356,7 @@ TEST(NonblockingHttpServerIntegrationTest,
   EXPECT_NE(second.find("HTTP/1.1 200 OK"), std::string::npos);
 }
 
-// Sibling of the above, exercising the other branch try_flush()'s caller
+// Sibling of the above, exercising the other branch flush_output()'s caller
 // can leave a connection in: ConnectionState::kClosing (close_after_flush
 // combined with a response that itself needs more than one send(2) call to
 // drain) — reached here via "Connection: close", the same as
@@ -426,6 +426,47 @@ TEST(NonblockingHttpServerIntegrationTest, SlowClientWithLargeResponseDoesNotBlo
       << "a large, slow-draining response on another connection must not delay this one";
 
   reader.join();
+}
+
+// Phase 4 exit criterion companion: a response too large for a
+// deliberately tiny, configured output-queue cap
+// (docs/decisions/0006-buffer-representation.md) gets the connection
+// closed predictably rather than the server buffering it without bound —
+// and the server stays fully healthy for every other connection
+// afterward. The request itself is small (well under the default
+// max_read_buffer_bytes), isolating this to the *output* queue's bound.
+TEST(NonblockingHttpServerIntegrationTest, OutputQueueOverflowClosesConnectionAndServerSurvives) {
+  NonblockingHttpServer::Config config;
+  config.port = 0;
+  config.max_output_queue_bytes = 256;  // smaller than any response default_route can produce
+  NonblockingHttpServer server(config, default_route);
+  std::thread thread([&server] { server.run(); });
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+  const std::size_t body_size = protocol::HttpRequestParser::kMaxBodyBytes;  // 1 MiB, echoed back
+  std::string body(body_size, 'y');
+  std::string request = "POST /echo HTTP/1.1\r\nHost: test\r\nContent-Length: " +
+                         std::to_string(body.size()) + "\r\n\r\n" + body;
+
+  RawTcpClient client(server.port());
+  ASSERT_TRUE(client.send_fragmented(request));
+
+  std::string trailing;
+  for (int i = 0; i < 200 && !client.is_closed(); ++i) {
+    trailing += client.read_chunk();
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  EXPECT_TRUE(client.is_closed())
+      << "a response too large for the configured output-queue cap must close the connection, "
+         "not buffer without bound";
+
+  RawTcpClient next_client(server.port());
+  ASSERT_TRUE(next_client.send_fragmented("GET / HTTP/1.1\r\nHost: test\r\n\r\n"));
+  std::string response = read_one_http_response(next_client);
+  EXPECT_NE(response.find("HTTP/1.1 200 OK"), std::string::npos);
+
+  server.stop();
+  thread.join();
 }
 
 // Phase 3 exit criterion: "end-to-end requests succeed", exercised under

@@ -1,20 +1,42 @@
 # ArcServe
 
 A C++20 event-driven network server, built up in phases: this repo
-currently implements **Phase 0 (build/tooling foundation)** and **Phase 1
-(blocking correctness server)** of the roadmap in the project spec
-(`05-arcserve-spec.md` at the portfolio root). Later phases (nonblocking
-epoll reactor, output buffering, worker pool, backpressure/timeouts,
-observability, benchmarking) are not yet implemented — see
-`docs/architecture.md`'s "What's deliberately not here yet" section.
+currently implements **Phases 0–5** of the roadmap in the project spec
+(`05-arcserve-spec.md` at the portfolio root) — build/tooling foundation,
+a blocking correctness server, a nonblocking epoll reactor, an incremental
+HTTP parser, bounded output buffering, and an optional worker pool. Later
+phases (timeouts/backpressure policy, observability/profiling,
+benchmarking) are not yet implemented — see `docs/architecture.md`'s
+"What's deliberately not here yet" section.
 
 ## What's here
 
 - **`arcserve_server`**: a single-threaded, blocking HTTP/1.1-subset
   server (`include/arcserve/server/blocking_server.hpp`). It handles one
   connection at a time, end to end, including keep-alive — its purpose is
-  to validate the protocol/parser layer in isolation, before Phase 2
-  introduces the nonblocking epoll reactor.
+  to validate the protocol/parser layer in isolation from the nonblocking
+  epoll reactor below. (Still the production binary — see
+  `docs/architecture.md`.)
+- **`arcserve::server::NonblockingHttpServer`**: the same HTTP/1.1 subset
+  served over a single-threaded `epoll` reactor
+  (`include/arcserve/reactor/epoll_reactor.hpp`) instead of one blocking
+  connection at a time — many connections make progress concurrently on
+  one thread, none of them ever blocking it on socket I/O. Optionally
+  dispatches request handling to a `concurrency::WorkerPool` instead of
+  running inline — see "Worker pool" below.
+- **`arcserve::reactor::Connection`** / **`arcserve::buffers::ByteBuffer`**
+  / **`arcserve::reactor::OutputQueue`**: per-connection state with a
+  contiguous, grow-capped read buffer and a bounded, multi-chunk output
+  queue (spec decision D3 —
+  [`docs/decisions/0006-buffer-representation.md`](docs/decisions/0006-buffer-representation.md)).
+  A connection that overflows either bound is closed predictably; the
+  server stays fully healthy for every other connection.
+- **`arcserve::concurrency::WorkerPool`**: a fixed-size, bounded-queue
+  thread pool for CPU-bound handler work
+  (spec decision D5 —
+  [`docs/decisions/0007-worker-pool-sizing.md`](docs/decisions/0007-worker-pool-sizing.md)).
+  A saturated pool returns `503` predictably rather than blocking the
+  reactor thread or growing memory without bound.
 - **`arcserve::net::FileDescriptor`**: the RAII fd wrapper every socket in
   this codebase is owned by (`include/arcserve/net/file_descriptor.hpp`).
 - **`arcserve::protocol::HttpRequestParser`**: a handwritten, byte-
@@ -49,13 +71,18 @@ scripts/test.sh Debug asan    # same, under ASan+UBSan
 Or directly: `ctest --test-dir build/Debug-none --output-on-failure`.
 
 Two test binaries:
-- `arcserve_unit_tests` — fd RAII, HTTP message serialization, and the
-  parser state machine (including byte-at-a-time and every-split-offset
-  fragmentation tests).
-- `arcserve_integration_tests` — `BlockingHttpServer` driven over real
-  loopback TCP sockets: fragmented requests, malformed input, oversized
-  bodies, keep-alive, `Connection: close`, mid-request client disconnect,
-  and sequential-client handling.
+- `arcserve_unit_tests` — fd RAII, HTTP message serialization, the parser
+  state machine (including byte-at-a-time and every-split-offset
+  fragmentation tests), `EpollReactor`, `Connection`, `ByteBuffer`,
+  `OutputQueue`, `BoundedWorkQueue`, `WorkerPool`.
+- `arcserve_integration_tests` — `BlockingHttpServer`, `EchoReactorServer`,
+  and `NonblockingHttpServer` (including its worker-pool dispatch mode)
+  driven over real loopback TCP sockets: fragmented requests, malformed
+  input, oversized bodies, keep-alive, `Connection: close`, mid-request
+  client disconnect, slow-client partial writes, output-queue overflow,
+  many-simultaneous-client stress, worker-pool saturation and shutdown,
+  and a direct-reactor-vs-worker-dispatch comparison for a CPU-heavy
+  handler.
 
 ## Run
 
@@ -75,11 +102,12 @@ include/arcserve/, src/           implementation (net, protocol, server, app)
 tests/{unit,integration,support}/ test suites + the raw-socket test client
 docs/                             architecture, protocol scope, ADRs
 scripts/                          build.sh, test.sh, format.sh, lint.sh
-.github/workflows/ci.yml          Linux build+test (all sanitizer variants) + static analysis
+.github/workflows/ci-arcserve.yml (repo root) Linux build+test (all sanitizer variants) + static analysis
 ```
 
 ## Decisions
 
-Architectural choices and the spec's open decisions (D1, D6, decided ahead
-of Phase 1 as the spec's handoff instructions require) are recorded in
-[`docs/decisions/`](docs/decisions/).
+Architectural choices and the spec's open decisions (D1–D6, each decided
+ahead of the phase the spec's handoff instructions require: D1/D6 before
+Phase 1, D2 before Phase 2, D3 before Phase 4, D5 during Phase 5) are
+recorded in [`docs/decisions/`](docs/decisions/).
