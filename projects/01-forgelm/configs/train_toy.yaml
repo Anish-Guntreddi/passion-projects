@@ -1,0 +1,42 @@
+# Example config for `forgelm train --config configs/train_toy.yaml` (Phase 3).
+# A tiny model + short run intended to run in seconds on CPU as a
+# reproducibility/demo artifact, not a real training run (Phase 5 covers the
+# scaling experiments). Fields map 1:1 to forgelm.config.TrainConfig.
+#
+# Run these first to produce the token arrays this config points at:
+#   forgelm tokenizer train --config configs/tokenizer_train.yaml
+#   forgelm dataset build --config configs/dataset_build.yaml
+#
+# `output_dir` makes this config file sufficient on its own to reproduce
+# the full run (FR1). `artifacts/` is gitignored, so running this doesn't
+# dirty the repo. To resume from a checkpoint, set `resume_from` to a path
+# under `output_dir` (e.g. artifacts/checkpoints/step_25.pt) and re-run.
+model:
+  vocab_size: 512
+  context_length: 64
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_ff: 256
+  dropout: 0.0
+  rope_theta: 10000.0
+  tie_weights: true
+  dtype: float32
+training:
+  seed: 1337
+  micro_batch_size: 8
+  grad_accum_steps: 2
+  max_steps: 50
+  warmup_steps: 5
+  lr: 0.0003
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+  grad_clip_norm: 1.0
+  eval_interval: 10
+  eval_batches: 3
+  device: cpu
+  precision: auto
+train_tokens_path: artifacts/dataset/train_tokens.npy
+val_tokens_path: artifacts/dataset/val_tokens.npy
+output_dir: artifacts/checkpoints
+checkpoint_interval: 25

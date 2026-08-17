@@ -9,6 +9,7 @@ from forgelm.dataset import (
     NextTokenDataset,
     build_dataset,
     compute_dataset_stats,
+    iter_batches,
     load_text,
     make_dataloader,
     tokenize_corpus,
@@ -152,6 +153,93 @@ def test_build_dataset_reconstructs_original_text(
     # see docs/decisions/0002-tokenizer-scope.md's "known limitation").
     reconstructed = trained_tokenizer.decode(train_tokens + val_tokens)
     assert reconstructed == tiny_corpus
+
+
+def test_iter_batches_is_deterministic_given_seed() -> None:
+    ds = NextTokenDataset(list(range(300)), context_length=8)
+    it_a = iter_batches(ds, batch_size=4, seed=1)
+    it_b = iter_batches(ds, batch_size=4, seed=1)
+    for _ in range(10):
+        xa, ya = next(it_a)
+        xb, yb = next(it_b)
+        assert torch.equal(xa, xb)
+        assert torch.equal(ya, yb)
+
+
+def test_iter_batches_different_seed_differs() -> None:
+    ds = NextTokenDataset(list(range(300)), context_length=8)
+    it_a = iter_batches(ds, batch_size=4, seed=1)
+    it_b = iter_batches(ds, batch_size=4, seed=2)
+    xa, _ = next(it_a)
+    xb, _ = next(it_b)
+    assert not torch.equal(xa, xb)
+
+
+def test_iter_batches_is_infinite_across_epoch_boundaries() -> None:
+    # A tiny dataset with few windows per epoch -- pull more batches than
+    # one epoch has, to exercise the epoch-rollover path.
+    ds = NextTokenDataset(list(range(20)), context_length=8)  # len(ds) == 12
+    it = iter_batches(ds, batch_size=4, seed=0)  # 3 batches/epoch
+    batches = [next(it) for _ in range(10)]  # spans multiple epochs
+    assert len(batches) == 10
+    for x, y in batches:
+        assert x.shape == (4, 8)
+        assert y.shape == (4, 8)
+
+
+def test_iter_batches_skip_matches_unskipped_continuation() -> None:
+    """The property Trainer.load_checkpoint relies on: skipping N batches
+    reproduces exactly what consuming N batches from a fresh iterator and
+    continuing would have yielded next."""
+    ds = NextTokenDataset(list(range(300)), context_length=8)
+    seed = 7
+    skip = 9
+
+    reference_iter = iter_batches(ds, batch_size=4, seed=seed)
+    for _ in range(skip):
+        next(reference_iter)
+    expected_x, expected_y = next(reference_iter)
+
+    skipped_iter = iter_batches(ds, batch_size=4, seed=seed, skip_batches=skip)
+    actual_x, actual_y = next(skipped_iter)
+
+    assert torch.equal(expected_x, actual_x)
+    assert torch.equal(expected_y, actual_y)
+
+
+@pytest.mark.parametrize("batch_size", [0, -1])
+def test_iter_batches_rejects_non_positive_batch_size(batch_size: int) -> None:
+    ds = NextTokenDataset(list(range(50)), context_length=8)
+    with pytest.raises(ValueError, match="batch_size"):
+        next(iter_batches(ds, batch_size=batch_size, seed=0))
+
+
+def test_iter_batches_rejects_negative_skip() -> None:
+    ds = NextTokenDataset(list(range(50)), context_length=8)
+    with pytest.raises(ValueError, match="skip_batches"):
+        next(iter_batches(ds, batch_size=4, seed=0, skip_batches=-1))
+
+
+def test_iter_batches_raises_instead_of_hanging_when_dataset_smaller_than_batch_size() -> None:
+    """A dataset with fewer windows than batch_size would make every epoch
+    of the internal drop_last=True DataLoader yield zero batches -- without
+    an explicit guard, iter_batches's `while True` loop would spin forever
+    without ever yielding a batch or raising, hanging any caller (e.g.
+    Trainer.train_step/evaluate) instead of failing fast and clearly. This
+    is reachable in practice with a small val split or a micro_batch_size
+    misconfigured relative to a small corpus."""
+    ds = NextTokenDataset(list(range(20)), context_length=8)  # len(ds) == 12
+    with pytest.raises(ValueError, match="batch_size"):
+        next(iter_batches(ds, batch_size=16, seed=0))
+
+
+def test_iter_batches_accepts_dataset_exactly_batch_size() -> None:
+    # Boundary case: len(dataset) == batch_size must still yield (exactly
+    # one batch per epoch), not be treated as "too small".
+    ds = NextTokenDataset(list(range(20)), context_length=8)  # len(ds) == 12
+    x, y = next(iter_batches(ds, batch_size=12, seed=0))
+    assert x.shape == (12, 8)
+    assert y.shape == (12, 8)
 
 
 def test_a_single_training_window_reconstructs_a_substring(

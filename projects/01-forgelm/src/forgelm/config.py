@@ -226,3 +226,192 @@ class DatasetBuildConfig:
             raise ConfigError(
                 f"DatasetBuildConfig.val_fraction must be in (0, 1), got {self.val_fraction}"
             )
+
+
+# --------------------------------------------------------------------------
+# Phase 2: model architecture config
+# --------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class ModelConfig:
+    """Decoder-only Transformer architecture config (FR5).
+
+    ``n_kv_heads`` is accepted for forward compatibility with grouped-query
+    attention (GQA) but must currently be left unset or equal to
+    ``n_heads`` -- GQA itself is deferred per D5 (spec default: stretch),
+    see ``docs/decisions/0007-gqa-deferred.md``.
+
+    ``dtype`` is the parameter storage dtype the model is *constructed*
+    with. Training-time mixed precision (autocast) is a separate concern
+    (D6, see ``docs/decisions/0008-precision-strategy.md``) and does not
+    change this field -- a ``dtype="float32"`` model still trains under
+    bf16 autocast on a supporting GPU; autocast casts activations on the
+    fly without touching the stored master weights.
+    """
+
+    vocab_size: int
+    context_length: int = 128
+    d_model: int = 128
+    n_layers: int = 2
+    n_heads: int = 4
+    n_kv_heads: int | None = None
+    d_ff: int = 512
+    dropout: float = 0.0
+    rope_theta: float = 10000.0
+    rmsnorm_eps: float = 1e-6
+    tie_weights: bool = True
+    dtype: str = "float32"
+
+    def __post_init__(self) -> None:
+        if self.vocab_size <= 0:
+            raise ConfigError(f"ModelConfig.vocab_size must be positive, got {self.vocab_size}")
+        if self.context_length <= 0:
+            raise ConfigError(
+                f"ModelConfig.context_length must be positive, got {self.context_length}"
+            )
+        if self.d_model <= 0:
+            raise ConfigError(f"ModelConfig.d_model must be positive, got {self.d_model}")
+        if self.n_layers <= 0:
+            raise ConfigError(f"ModelConfig.n_layers must be positive, got {self.n_layers}")
+        if self.n_heads <= 0:
+            raise ConfigError(f"ModelConfig.n_heads must be positive, got {self.n_heads}")
+        if self.d_model % self.n_heads != 0:
+            raise ConfigError(
+                f"ModelConfig.d_model ({self.d_model}) must be divisible by "
+                f"n_heads ({self.n_heads})"
+            )
+        head_dim = self.d_model // self.n_heads
+        if head_dim % 2 != 0:
+            raise ConfigError(
+                f"ModelConfig: d_model / n_heads (head_dim={head_dim}) must be even -- "
+                "RoPE rotates head_dim/2 coordinate pairs"
+            )
+        if self.n_kv_heads is not None and self.n_kv_heads != self.n_heads:
+            raise NotImplementedError(
+                "grouped-query attention (n_kv_heads != n_heads) is deferred per D5 -- "
+                "see docs/decisions/0007-gqa-deferred.md; leave n_kv_heads unset or "
+                "equal to n_heads"
+            )
+        if self.d_ff <= 0:
+            raise ConfigError(f"ModelConfig.d_ff must be positive, got {self.d_ff}")
+        if not (0.0 <= self.dropout < 1.0):
+            raise ConfigError(f"ModelConfig.dropout must be in [0, 1), got {self.dropout}")
+        if self.rope_theta <= 0:
+            raise ConfigError(f"ModelConfig.rope_theta must be positive, got {self.rope_theta}")
+        if self.dtype not in ("float32", "bfloat16", "float16"):
+            raise ConfigError(
+                "ModelConfig.dtype must be one of 'float32'/'bfloat16'/'float16', "
+                f"got {self.dtype!r}"
+            )
+
+
+# --------------------------------------------------------------------------
+# Phase 3: training system config
+# --------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class TrainingConfig:
+    """Training-loop config (FR6/FR7): optimizer, LR schedule, precision,
+    gradient accumulation/clipping, validation cadence.
+
+    ``micro_batch_size`` is the batch actually run through one forward/
+    backward pass; ``grad_accum_steps`` > 1 accumulates gradients over
+    that many micro-batches before an optimizer step, so the *effective*
+    batch size is ``micro_batch_size * grad_accum_steps`` without needing
+    that many examples resident in memory/compute at once at any one time
+    (FR6 "gradient accumulation").
+    """
+
+    seed: int = 1337
+    micro_batch_size: int = 8
+    grad_accum_steps: int = 1
+    max_steps: int = 100
+    warmup_steps: int = 10
+    lr: float = 3e-4
+    min_lr_ratio: float = 0.1
+    weight_decay: float = 0.1
+    beta1: float = 0.9
+    beta2: float = 0.95
+    grad_clip_norm: float = 1.0
+    eval_interval: int = 20
+    eval_batches: int = 5
+    device: str = "cpu"
+    precision: str = "auto"  # "auto" | "fp32" | "bf16" -- see D6
+
+    def __post_init__(self) -> None:
+        if self.micro_batch_size <= 0:
+            raise ConfigError(
+                f"TrainingConfig.micro_batch_size must be positive, got {self.micro_batch_size}"
+            )
+        if self.grad_accum_steps <= 0:
+            raise ConfigError(
+                f"TrainingConfig.grad_accum_steps must be positive, got {self.grad_accum_steps}"
+            )
+        if self.max_steps <= 0:
+            raise ConfigError(f"TrainingConfig.max_steps must be positive, got {self.max_steps}")
+        if self.warmup_steps < 0:
+            raise ConfigError(
+                f"TrainingConfig.warmup_steps must be non-negative, got {self.warmup_steps}"
+            )
+        if self.warmup_steps > self.max_steps:
+            raise ConfigError("TrainingConfig.warmup_steps must be <= max_steps")
+        if self.lr <= 0:
+            raise ConfigError(f"TrainingConfig.lr must be positive, got {self.lr}")
+        if not (0.0 <= self.min_lr_ratio <= 1.0):
+            raise ConfigError(
+                f"TrainingConfig.min_lr_ratio must be in [0, 1], got {self.min_lr_ratio}"
+            )
+        if self.weight_decay < 0:
+            raise ConfigError(
+                f"TrainingConfig.weight_decay must be non-negative, got {self.weight_decay}"
+            )
+        if not (0.0 < self.beta1 < 1.0) or not (0.0 < self.beta2 < 1.0):
+            raise ConfigError(
+                f"TrainingConfig beta1/beta2 must be in (0, 1), got {self.beta1}/{self.beta2}"
+            )
+        if self.grad_clip_norm <= 0:
+            raise ConfigError(
+                f"TrainingConfig.grad_clip_norm must be positive, got {self.grad_clip_norm}"
+            )
+        if self.eval_interval <= 0:
+            raise ConfigError(
+                f"TrainingConfig.eval_interval must be positive, got {self.eval_interval}"
+            )
+        if self.eval_batches <= 0:
+            raise ConfigError(
+                f"TrainingConfig.eval_batches must be positive, got {self.eval_batches}"
+            )
+        if self.device not in ("cpu", "cuda"):
+            raise ConfigError(f"TrainingConfig.device must be 'cpu' or 'cuda', got {self.device!r}")
+        if self.precision not in ("auto", "fp32", "bf16"):
+            raise ConfigError(
+                f"TrainingConfig.precision must be 'auto'/'fp32'/'bf16', got {self.precision!r}"
+            )
+
+
+@dataclasses.dataclass(frozen=True)
+class TrainConfig:
+    """Top-level config for ``forgelm train`` (FR1: config-driven execution).
+
+    Points at pre-built token arrays produced by ``forgelm dataset build``
+    -- ``forgelm.training`` owns optimization/checkpointing only, not
+    tokenization or dataset construction (see the module boundary table in
+    ``docs/architecture.md``).
+    """
+
+    model: ModelConfig
+    training: TrainingConfig
+    train_tokens_path: Path
+    val_tokens_path: Path
+    output_dir: Path | None = None
+    resume_from: Path | None = None
+    checkpoint_interval: int = 0  # 0 = only ever write the final checkpoint
+
+    def __post_init__(self) -> None:
+        if self.checkpoint_interval < 0:
+            raise ConfigError(
+                "TrainConfig.checkpoint_interval must be non-negative, got "
+                f"{self.checkpoint_interval}"
+            )

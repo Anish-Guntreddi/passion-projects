@@ -10,7 +10,14 @@ import typer
 from forgelm.cli.dataset_cli import build_dataset_artifacts
 from forgelm.cli.smoke import run_smoke
 from forgelm.cli.tokenizer_cli import decode_ids, encode_text, train_tokenizer
-from forgelm.config import DatasetBuildConfig, SmokeConfig, TokenizerTrainConfig, load_config
+from forgelm.cli.train_cli import run_training
+from forgelm.config import (
+    DatasetBuildConfig,
+    SmokeConfig,
+    TokenizerTrainConfig,
+    TrainConfig,
+    load_config,
+)
 
 app = typer.Typer(help="ForgeLM: a from-scratch decoder-only Transformer training stack.")
 tokenizer_app = typer.Typer(help="Train/encode/decode with the byte-level BPE tokenizer.")
@@ -126,6 +133,32 @@ def dataset_build(
         )
     try:
         result = build_dataset_artifacts(config, output_dir)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+
+
+@app.command()
+def train(
+    config_path: Path = typer.Option(
+        ...,
+        "--config",
+        exists=True,
+        dir_okay=False,
+        help="YAML config file mapping to forgelm.config.TrainConfig (required -- the "
+        "nested model/training config is not exposed as individual flags).",
+    ),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Directory to write checkpoints into. Overrides the config file's "
+        "'output_dir' when both are given; one of the two is required.",
+    ),
+) -> None:
+    """Train (or resume) a model end to end from pre-built token arrays (FR6/FR7)."""
+    config = load_config(config_path, TrainConfig)
+    try:
+        result = run_training(config, output_dir)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
     typer.echo(json.dumps(result, indent=2, sort_keys=True))

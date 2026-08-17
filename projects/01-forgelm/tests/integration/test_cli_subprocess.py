@@ -167,3 +167,217 @@ def test_cli_reports_a_clean_error_for_bad_config(tmp_path: Path) -> None:
     )
     assert proc.returncode != 0
     assert "vocab_size" in proc.stderr
+
+
+# -- Phase 3: `forgelm train` -------------------------------------------------------
+
+
+def _train_config_yaml(
+    *,
+    train_tokens_path: Path,
+    val_tokens_path: Path,
+    output_dir: Path,
+    resume_from: Path | None = None,
+) -> str:
+    text = (
+        "model:\n"
+        "  vocab_size: 280\n"
+        "  context_length: 16\n"
+        "  d_model: 16\n"
+        "  n_layers: 1\n"
+        "  n_heads: 2\n"
+        "  d_ff: 32\n"
+        "training:\n"
+        "  micro_batch_size: 4\n"
+        "  max_steps: 6\n"
+        "  warmup_steps: 1\n"
+        "  eval_interval: 3\n"
+        "  eval_batches: 1\n"
+        "  device: cpu\n"
+        "  precision: fp32\n"
+        f"train_tokens_path: {train_tokens_path}\n"
+        f"val_tokens_path: {val_tokens_path}\n"
+        f"output_dir: {output_dir}\n"
+        "checkpoint_interval: 3\n"
+    )
+    if resume_from is not None:
+        text += f"resume_from: {resume_from}\n"
+    return text
+
+
+def test_cli_train_end_to_end_writes_checkpoints_and_resumes(tmp_path: Path) -> None:
+    """FR1/FR6/FR7 via the real CLI: train from a config-built dataset,
+    write periodic + final checkpoints, then resume from a mid-run
+    checkpoint and continue to the same max_steps."""
+    corpus_path = tmp_path / "corpus.txt"
+    corpus_path.write_text("once upon a time there was a small fox. " * 60, encoding="utf-8")
+    tok_path = tmp_path / "tok.json"
+    train_tok_proc = _run(
+        "tokenizer",
+        "train",
+        "--input",
+        str(corpus_path),
+        "--output",
+        str(tok_path),
+        "--vocab-size",
+        "280",
+    )
+    assert train_tok_proc.returncode == 0, train_tok_proc.stderr
+
+    dataset_dir = tmp_path / "dataset"
+    build_proc = _run(
+        "dataset",
+        "build",
+        "--input",
+        str(corpus_path),
+        "--tokenizer",
+        str(tok_path),
+        "--output",
+        str(dataset_dir),
+        "--context-length",
+        "16",
+        "--val-fraction",
+        "0.2",
+    )
+    assert build_proc.returncode == 0, build_proc.stderr
+
+    ckpt_dir = tmp_path / "checkpoints"
+    train_config_path = tmp_path / "train.yaml"
+    train_config_path.write_text(
+        _train_config_yaml(
+            train_tokens_path=dataset_dir / "train_tokens.npy",
+            val_tokens_path=dataset_dir / "val_tokens.npy",
+            output_dir=ckpt_dir,
+        )
+    )
+
+    train_proc = _run("train", "--config", str(train_config_path))
+    assert train_proc.returncode == 0, train_proc.stderr
+    result = json.loads(train_proc.stdout)
+    assert result["start_step"] == 0
+    assert result["final_step"] == 6
+    assert (ckpt_dir / "final.pt").exists()
+    assert (ckpt_dir / "step_3.pt").exists()
+
+    # FR6 "logging": the full per-step loss/lr/grad_norm (+ periodic
+    # val_loss) trajectory must be persisted, not just the single final
+    # summary `result` above.
+    metrics_records = [
+        json.loads(line)
+        for line in (ckpt_dir / "metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    step_records = [r for r in metrics_records if r["kind"] == "step"]
+    eval_records = [r for r in metrics_records if r["kind"] == "eval"]
+    assert [r["step"] for r in step_records] == [1, 2, 3, 4, 5, 6]
+    assert all({"loss", "lr", "grad_norm"} <= r.keys() for r in step_records)
+    assert [r["step"] for r in eval_records] == [3, 6]  # eval_interval=3 + final step
+
+    # Resume from the mid-run checkpoint with the identical config
+    # (config_hash must match) -> continues from step 3 to step 6.
+    resume_config_path = tmp_path / "train_resume.yaml"
+    resume_config_path.write_text(
+        _train_config_yaml(
+            train_tokens_path=dataset_dir / "train_tokens.npy",
+            val_tokens_path=dataset_dir / "val_tokens.npy",
+            output_dir=ckpt_dir,
+            resume_from=ckpt_dir / "step_3.pt",
+        )
+    )
+    resume_proc = _run("train", "--config", str(resume_config_path))
+    assert resume_proc.returncode == 0, resume_proc.stderr
+    resume_result = json.loads(resume_proc.stdout)
+    assert resume_result["start_step"] == 3
+    assert resume_result["final_step"] == 6
+
+
+def test_cli_train_resume_against_a_different_dataset_raises_a_clean_error(
+    tmp_path: Path,
+) -> None:
+    """FR7: resuming a checkpoint against a *different* dataset than it was
+    produced with (e.g. --resume-from a checkpoint while the config's
+    train/val token paths now point at a regenerated/different corpus)
+    must fail loudly via config_hash, not silently train on a different
+    token stream. See forgelm.training.checkpoint.config_hash."""
+    corpus_path = tmp_path / "corpus.txt"
+    corpus_path.write_text("once upon a time there was a small fox. " * 60, encoding="utf-8")
+    tok_path = tmp_path / "tok.json"
+    assert (
+        _run(
+            "tokenizer",
+            "train",
+            "--input",
+            str(corpus_path),
+            "--output",
+            str(tok_path),
+            "--vocab-size",
+            "280",
+        ).returncode
+        == 0
+    )
+
+    def _build_dataset(corpus: Path, output: Path) -> None:
+        proc = _run(
+            "dataset",
+            "build",
+            "--input",
+            str(corpus),
+            "--tokenizer",
+            str(tok_path),
+            "--output",
+            str(output),
+            "--context-length",
+            "16",
+            "--val-fraction",
+            "0.2",
+        )
+        assert proc.returncode == 0, proc.stderr
+
+    dataset_dir = tmp_path / "dataset"
+    _build_dataset(corpus_path, dataset_dir)
+
+    other_corpus_path = tmp_path / "other_corpus.txt"
+    other_corpus_path.write_text(
+        "a completely different sentence about something else entirely. " * 60, encoding="utf-8"
+    )
+    other_dataset_dir = tmp_path / "other_dataset"
+    _build_dataset(other_corpus_path, other_dataset_dir)
+
+    ckpt_dir = tmp_path / "checkpoints"
+    train_config_path = tmp_path / "train.yaml"
+    train_config_path.write_text(
+        _train_config_yaml(
+            train_tokens_path=dataset_dir / "train_tokens.npy",
+            val_tokens_path=dataset_dir / "val_tokens.npy",
+            output_dir=ckpt_dir,
+        )
+    )
+    train_proc = _run("train", "--config", str(train_config_path))
+    assert train_proc.returncode == 0, train_proc.stderr
+
+    # Resume from the checkpoint but point the config at the *other*
+    # dataset's token arrays -- same model/training config otherwise.
+    resume_config_path = tmp_path / "train_resume_mismatch.yaml"
+    resume_config_path.write_text(
+        _train_config_yaml(
+            train_tokens_path=other_dataset_dir / "train_tokens.npy",
+            val_tokens_path=other_dataset_dir / "val_tokens.npy",
+            output_dir=ckpt_dir,
+            resume_from=ckpt_dir / "step_3.pt",
+        )
+    )
+    resume_proc = _run("train", "--config", str(resume_config_path))
+    assert resume_proc.returncode != 0
+    assert "config_hash" in resume_proc.stderr
+
+
+def test_cli_train_without_config_or_output_reports_clean_error(tmp_path: Path) -> None:
+    config_path = tmp_path / "no_output.yaml"
+    config_path.write_text(
+        "model:\n  vocab_size: 280\n"
+        "training:\n  micro_batch_size: 4\n  max_steps: 2\n"
+        "train_tokens_path: does_not_exist_train.npy\n"
+        "val_tokens_path: does_not_exist_val.npy\n"
+    )
+    proc = _run("train", "--config", str(config_path))
+    assert proc.returncode != 0
+    assert "output" in proc.stderr.lower()

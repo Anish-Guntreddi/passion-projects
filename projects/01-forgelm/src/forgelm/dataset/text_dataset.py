@@ -22,7 +22,7 @@ Phase 1 exit criterion).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import torch
@@ -136,6 +136,67 @@ def make_dataloader(
         num_workers=num_workers,
         drop_last=drop_last,
     )
+
+
+def iter_batches(
+    dataset: Dataset, batch_size: int, seed: int, *, skip_batches: int = 0
+) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
+    """Infinite, deterministic stream of ``(x, y)`` batches over ``dataset``.
+
+    Unlike :func:`make_dataloader` (a single-epoch DataLoader whose
+    permutation is fixed only until the next ``iter()`` call advances its
+    generator's internal state), this is a *pure* function of ``(dataset,
+    batch_size, seed)``: epoch ``e``'s batches always come from
+    ``make_dataloader(dataset, batch_size, seed=seed + e)``, constructed
+    fresh each time -- so the entire infinite batch sequence produced from
+    step 0 onward is reproducible from those three arguments alone, with
+    no hidden state carried between calls.
+
+    This is what makes training resumable (Phase 3 exit criterion): to
+    continue a run from training step ``N``, recreate this generator with
+    the same ``(dataset, batch_size, seed)`` and pass ``skip_batches=N`` to
+    fast-forward past the batches already consumed before the checkpoint
+    was saved, reproducing the exact batch order the uninterrupted run
+    would have seen at steps ``N, N+1, ...``. See
+    ``docs/decisions/0009-checkpoint-format.md`` and
+    ``forgelm.training.loop.Trainer``.
+    """
+    if batch_size <= 0:
+        raise ValueError(f"batch_size must be positive, got {batch_size}")
+    if skip_batches < 0:
+        raise ValueError(f"skip_batches must be non-negative, got {skip_batches}")
+    try:
+        dataset_len = len(dataset)  # type: ignore[arg-type]
+    except TypeError as exc:
+        raise ValueError(
+            "iter_batches requires a Dataset that implements __len__ (needed to "
+            "guard against a batch_size larger than the dataset -- see below)"
+        ) from exc
+    if dataset_len < batch_size:
+        # make_dataloader() is always called with drop_last=True below, so
+        # an epoch over a dataset smaller than batch_size yields *zero*
+        # batches -- without this check the `while True` loop below would
+        # spin forever without ever yielding a batch or raising, hanging
+        # any caller (e.g. Trainer.train_step()/evaluate()) instead of
+        # failing with a clear, immediate error.
+        raise ValueError(
+            f"dataset has {dataset_len} example(s), fewer than batch_size={batch_size}; "
+            "with drop_last=True this would never yield a full batch. Reduce "
+            "micro_batch_size, increase context_length's window count, or use a "
+            "larger dataset/val split."
+        )
+
+    batches_yielded = 0
+    epoch = 0
+    while True:
+        loader = make_dataloader(
+            dataset, batch_size, shuffle=True, seed=seed + epoch, drop_last=True
+        )
+        for x, y in loader:
+            if batches_yielded >= skip_batches:
+                yield x, y
+            batches_yielded += 1
+        epoch += 1
 
 
 @dataclasses.dataclass(frozen=True)
