@@ -1,0 +1,1145 @@
+[
+  {
+    "bench_warmup_steps": 10,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 3.973217010498047,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 300,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 256,
+      "d_model": 64,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 2,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "scaling_small",
+    "param_count": 164160,
+    "peak_memory_bytes": 62195712,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 6.64615369660775,
+    "step_time_ms_p50": 6.279478999204002,
+    "timestamp": "2026-08-17T17:49:26.719864+00:00",
+    "tokens_per_sec": 308148.15508183563,
+    "tokens_per_step": 2048,
+    "torch_compile": false,
+    "total_step_time_s": 1.993846108982325,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 310,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 310,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 4.028708648681641,
+    "val_loss_history": [
+      {
+        "step": 40,
+        "tokens": 81920,
+        "val_loss": 5.453713989257812
+      },
+      {
+        "step": 70,
+        "tokens": 143360,
+        "val_loss": 5.025656127929688
+      },
+      {
+        "step": 100,
+        "tokens": 204800,
+        "val_loss": 4.724201965332031
+      },
+      {
+        "step": 130,
+        "tokens": 266240,
+        "val_loss": 4.499668884277344
+      },
+      {
+        "step": 160,
+        "tokens": 327680,
+        "val_loss": 4.328936767578125
+      },
+      {
+        "step": 190,
+        "tokens": 389120,
+        "val_loss": 4.210655975341797
+      },
+      {
+        "step": 220,
+        "tokens": 450560,
+        "val_loss": 4.131468963623047
+      },
+      {
+        "step": 250,
+        "tokens": 512000,
+        "val_loss": 4.080827331542968
+      },
+      {
+        "step": 280,
+        "tokens": 573440,
+        "val_loss": 4.0504913330078125
+      },
+      {
+        "step": 310,
+        "tokens": 634880,
+        "val_loss": 4.028708648681641
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 10,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 3.3387608528137207,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 300,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "scaling_medium",
+    "param_count": 1115264,
+    "peak_memory_bytes": 138240000,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.45105564336821,
+    "step_time_ms_p50": 11.054556000090088,
+    "timestamp": "2026-08-17T17:49:30.554581+00:00",
+    "tokens_per_sec": 178848.13975086072,
+    "tokens_per_step": 2048,
+    "torch_compile": false,
+    "total_step_time_s": 3.4353166930104635,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 310,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 310,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 3.41555118560791,
+    "val_loss_history": [
+      {
+        "step": 40,
+        "tokens": 81920,
+        "val_loss": 4.765267944335937
+      },
+      {
+        "step": 70,
+        "tokens": 143360,
+        "val_loss": 4.263606262207031
+      },
+      {
+        "step": 100,
+        "tokens": 204800,
+        "val_loss": 3.9602283477783202
+      },
+      {
+        "step": 130,
+        "tokens": 266240,
+        "val_loss": 3.7457548141479493
+      },
+      {
+        "step": 160,
+        "tokens": 327680,
+        "val_loss": 3.6192066192626955
+      },
+      {
+        "step": 190,
+        "tokens": 389120,
+        "val_loss": 3.538773536682129
+      },
+      {
+        "step": 220,
+        "tokens": 450560,
+        "val_loss": 3.485683536529541
+      },
+      {
+        "step": 250,
+        "tokens": 512000,
+        "val_loss": 3.449557304382324
+      },
+      {
+        "step": 280,
+        "tokens": 573440,
+        "val_loss": 3.430128574371338
+      },
+      {
+        "step": 310,
+        "tokens": 634880,
+        "val_loss": 3.41555118560791
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 10,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 2.9077534675598145,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 300,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 1024,
+      "d_model": 256,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 8,
+      "n_kv_heads": null,
+      "n_layers": 6,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "scaling_larger",
+    "param_count": 6425856,
+    "peak_memory_bytes": 395625984,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 16.143217713288323,
+    "step_time_ms_p50": 15.799597000295762,
+    "timestamp": "2026-08-17T17:49:35.915042+00:00",
+    "tokens_per_sec": 126864.42296532894,
+    "tokens_per_step": 2048,
+    "torch_compile": false,
+    "total_step_time_s": 4.842965313986497,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 310,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 310,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 3.0417396068572997,
+    "val_loss_history": [
+      {
+        "step": 40,
+        "tokens": 81920,
+        "val_loss": 4.110005950927734
+      },
+      {
+        "step": 70,
+        "tokens": 143360,
+        "val_loss": 3.809218978881836
+      },
+      {
+        "step": 100,
+        "tokens": 204800,
+        "val_loss": 3.602819061279297
+      },
+      {
+        "step": 130,
+        "tokens": 266240,
+        "val_loss": 3.4362236976623537
+      },
+      {
+        "step": 160,
+        "tokens": 327680,
+        "val_loss": 3.299736213684082
+      },
+      {
+        "step": 190,
+        "tokens": 389120,
+        "val_loss": 3.205409574508667
+      },
+      {
+        "step": 220,
+        "tokens": 450560,
+        "val_loss": 3.136336612701416
+      },
+      {
+        "step": 250,
+        "tokens": 512000,
+        "val_loss": 3.087672233581543
+      },
+      {
+        "step": 280,
+        "tokens": 573440,
+        "val_loss": 3.0588637828826903
+      },
+      {
+        "step": 310,
+        "tokens": 634880,
+        "val_loss": 3.0417396068572997
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.196807861328125,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 32,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "context_length_32",
+    "param_count": 1115264,
+    "peak_memory_bytes": 54319104,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.088623499927053,
+    "step_time_ms_p50": 10.991452998496243,
+    "timestamp": "2026-08-17T17:49:36.246447+00:00",
+    "tokens_per_sec": 46173.44975265579,
+    "tokens_per_step": 512,
+    "torch_compile": false,
+    "total_step_time_s": 0.22177246999854106,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.28206787109375,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 12800,
+        "val_loss": 5.28206787109375
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.304656982421875,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 64,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "context_length_64",
+    "param_count": 1115264,
+    "peak_memory_bytes": 79138816,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.716527950011368,
+    "step_time_ms_p50": 11.633836000328301,
+    "timestamp": "2026-08-17T17:49:36.657025+00:00",
+    "tokens_per_sec": 87397.90528123191,
+    "tokens_per_step": 1024,
+    "torch_compile": false,
+    "total_step_time_s": 0.23433055900022737,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.246524047851563,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 25600,
+        "val_loss": 5.246524047851563
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.2116241455078125,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "context_length_128",
+    "param_count": 1115264,
+    "peak_memory_bytes": 138240000,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.809555899981206,
+    "step_time_ms_p50": 11.17361499927938,
+    "timestamp": "2026-08-17T17:49:37.019874+00:00",
+    "tokens_per_sec": 173418.88360114026,
+    "tokens_per_step": 2048,
+    "torch_compile": false,
+    "total_step_time_s": 0.2361911179996241,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.2300537109375,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 51200,
+        "val_loss": 5.2300537109375
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.195285797119141,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 256,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "context_length_256",
+    "param_count": 1115264,
+    "peak_memory_bytes": 294289408,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.526781499742356,
+    "step_time_ms_p50": 11.310520001643454,
+    "timestamp": "2026-08-17T17:49:37.403041+00:00",
+    "tokens_per_sec": 355346.37314774754,
+    "tokens_per_step": 4096,
+    "torch_compile": false,
+    "total_step_time_s": 0.2305356299948471,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.215178680419922,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 102400,
+        "val_loss": 5.215178680419922
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.248870849609375,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "batch_size_4",
+    "param_count": 1115264,
+    "peak_memory_bytes": 59123712,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 10.913112750040455,
+    "step_time_ms_p50": 10.80979000107618,
+    "timestamp": "2026-08-17T17:49:37.833204+00:00",
+    "tokens_per_sec": 46916.03685649652,
+    "tokens_per_step": 512,
+    "torch_compile": false,
+    "total_step_time_s": 0.2182622550008091,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 4,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.258453369140625,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 12800,
+        "val_loss": 5.258453369140625
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.23529052734375,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "batch_size_8",
+    "param_count": 1115264,
+    "peak_memory_bytes": 85495808,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.072368049826764,
+    "step_time_ms_p50": 10.951931999443332,
+    "timestamp": "2026-08-17T17:49:38.174162+00:00",
+    "tokens_per_sec": 92482.47487727084,
+    "tokens_per_step": 1024,
+    "torch_compile": false,
+    "total_step_time_s": 0.22144736099653528,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 8,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.246084594726563,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 25600,
+        "val_loss": 5.246084594726563
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.2116241455078125,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "batch_size_16",
+    "param_count": 1115264,
+    "peak_memory_bytes": 138240000,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.388765549963864,
+    "step_time_ms_p50": 11.160334999658517,
+    "timestamp": "2026-08-17T17:49:38.579031+00:00",
+    "tokens_per_sec": 179826.33771985042,
+    "tokens_per_step": 2048,
+    "torch_compile": false,
+    "total_step_time_s": 0.22777531099927728,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.2300537109375,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 51200,
+        "val_loss": 5.2300537109375
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.207450866699219,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "batch_size_32",
+    "param_count": 1115264,
+    "peak_memory_bytes": 243728384,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.204728449774848,
+    "step_time_ms_p50": 11.169212999448064,
+    "timestamp": "2026-08-17T17:49:39.017467+00:00",
+    "tokens_per_sec": 365559.95251114777,
+    "tokens_per_step": 4096,
+    "torch_compile": false,
+    "total_step_time_s": 0.22409456899549696,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 32,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.226693725585937,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 102400,
+        "val_loss": 5.226693725585937
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 5,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.19538688659668,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 20,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 512,
+      "d_model": 128,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 4,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "batch_size_64",
+    "param_count": 1115264,
+    "peak_memory_bytes": 454705152,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 11.689985649991286,
+    "step_time_ms_p50": 11.42233300015505,
+    "timestamp": "2026-08-17T17:49:39.451097+00:00",
+    "tokens_per_sec": 700770.7490219295,
+    "tokens_per_step": 8192,
+    "torch_compile": false,
+    "total_step_time_s": 0.23379971299982572,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 25,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 25,
+      "micro_batch_size": 64,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.220469284057617,
+    "val_loss_history": [
+      {
+        "step": 25,
+        "tokens": 204800,
+        "val_loss": 5.220469284057617
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 20,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.3204193115234375,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 50,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 256,
+      "d_model": 64,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 2,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "compile_ab_eager",
+    "param_count": 164160,
+    "peak_memory_bytes": 62195712,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 7.418651100088027,
+    "step_time_ms_p50": 6.813084000896197,
+    "timestamp": "2026-08-17T17:49:40.032111+00:00",
+    "tokens_per_sec": 276060.9674682907,
+    "tokens_per_step": 2048,
+    "torch_compile": false,
+    "total_step_time_s": 0.37093255500440137,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 70,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 70,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.321490478515625,
+    "val_loss_history": [
+      {
+        "step": 70,
+        "tokens": 143360,
+        "val_loss": 5.321490478515625
+      }
+    ]
+  },
+  {
+    "bench_warmup_steps": 20,
+    "compile_error": null,
+    "device": "cuda",
+    "final_train_loss": 5.320404052734375,
+    "hardware": {
+      "cpu": "x86_64",
+      "device_type": "cuda",
+      "gpu_name": "NVIDIA GeForce RTX 4090",
+      "gpu_total_memory_bytes": 25756696576
+    },
+    "measured_steps": 50,
+    "model_config": {
+      "context_length": 128,
+      "d_ff": 256,
+      "d_model": 64,
+      "dropout": 0.0,
+      "dtype": "float32",
+      "n_heads": 4,
+      "n_kv_heads": null,
+      "n_layers": 2,
+      "rmsnorm_eps": 1e-06,
+      "rope_theta": 10000.0,
+      "tie_weights": true,
+      "vocab_size": 512
+    },
+    "name": "compile_ab_compiled",
+    "param_count": 164160,
+    "peak_memory_bytes": 52627456,
+    "seed": 1337,
+    "software": {
+      "cuda_version": "12.4",
+      "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+      "python_implementation": "cpython",
+      "python_version": "3.12.3",
+      "torch_version": "2.6.0+cu124"
+    },
+    "step_time_ms_mean": 5.411208780133165,
+    "step_time_ms_p50": 5.342645999917295,
+    "timestamp": "2026-08-17T17:50:17.550298+00:00",
+    "tokens_per_sec": 378473.66147081106,
+    "tokens_per_step": 2048,
+    "torch_compile": true,
+    "total_step_time_s": 0.27056043900665827,
+    "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+    "training_config": {
+      "beta1": 0.9,
+      "beta2": 0.95,
+      "device": "cuda",
+      "eval_batches": 5,
+      "eval_interval": 70,
+      "grad_accum_steps": 1,
+      "grad_clip_norm": 1.0,
+      "lr": 0.0003,
+      "max_steps": 70,
+      "micro_batch_size": 16,
+      "min_lr_ratio": 0.1,
+      "precision": "auto",
+      "seed": 1337,
+      "warmup_steps": 20,
+      "weight_decay": 0.1
+    },
+    "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+    "val_loss": 5.321435546875,
+    "val_loss_history": [
+      {
+        "step": 70,
+        "tokens": 143360,
+        "val_loss": 5.321435546875
+      }
+    ]
+  }
+]

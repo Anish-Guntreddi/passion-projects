@@ -1,0 +1,72 @@
+{
+  "bench_warmup_steps": 20,
+  "compile_error": null,
+  "device": "cuda",
+  "final_train_loss": 5.320404052734375,
+  "hardware": {
+    "cpu": "x86_64",
+    "device_type": "cuda",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_total_memory_bytes": 25756696576
+  },
+  "measured_steps": 50,
+  "model_config": {
+    "context_length": 128,
+    "d_ff": 256,
+    "d_model": 64,
+    "dropout": 0.0,
+    "dtype": "float32",
+    "n_heads": 4,
+    "n_kv_heads": null,
+    "n_layers": 2,
+    "rmsnorm_eps": 1e-06,
+    "rope_theta": 10000.0,
+    "tie_weights": true,
+    "vocab_size": 512
+  },
+  "name": "compile_ab_compiled",
+  "param_count": 164160,
+  "peak_memory_bytes": 52627456,
+  "seed": 1337,
+  "software": {
+    "cuda_version": "12.4",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python_implementation": "cpython",
+    "python_version": "3.12.3",
+    "torch_version": "2.6.0+cu124"
+  },
+  "step_time_ms_mean": 5.411208780133165,
+  "step_time_ms_p50": 5.342645999917295,
+  "timestamp": "2026-08-17T17:50:17.550298+00:00",
+  "tokens_per_sec": 378473.66147081106,
+  "tokens_per_step": 2048,
+  "torch_compile": true,
+  "total_step_time_s": 0.27056043900665827,
+  "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+  "training_config": {
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "device": "cuda",
+    "eval_batches": 5,
+    "eval_interval": 70,
+    "grad_accum_steps": 1,
+    "grad_clip_norm": 1.0,
+    "lr": 0.0003,
+    "max_steps": 70,
+    "micro_batch_size": 16,
+    "min_lr_ratio": 0.1,
+    "precision": "auto",
+    "seed": 1337,
+    "warmup_steps": 20,
+    "weight_decay": 0.1
+  },
+  "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+  "val_loss": 5.321435546875,
+  "val_loss_history": [
+    {
+      "step": 70,
+      "tokens": 143360,
+      "val_loss": 5.321435546875
+    }
+  ]
+}

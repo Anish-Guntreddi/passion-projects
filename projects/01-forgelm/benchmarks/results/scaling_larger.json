@@ -1,0 +1,117 @@
+{
+  "bench_warmup_steps": 10,
+  "compile_error": null,
+  "device": "cuda",
+  "final_train_loss": 2.9077534675598145,
+  "hardware": {
+    "cpu": "x86_64",
+    "device_type": "cuda",
+    "gpu_name": "NVIDIA GeForce RTX 4090",
+    "gpu_total_memory_bytes": 25756696576
+  },
+  "measured_steps": 300,
+  "model_config": {
+    "context_length": 128,
+    "d_ff": 1024,
+    "d_model": 256,
+    "dropout": 0.0,
+    "dtype": "float32",
+    "n_heads": 8,
+    "n_kv_heads": null,
+    "n_layers": 6,
+    "rmsnorm_eps": 1e-06,
+    "rope_theta": 10000.0,
+    "tie_weights": true,
+    "vocab_size": 512
+  },
+  "name": "scaling_larger",
+  "param_count": 6425856,
+  "peak_memory_bytes": 395625984,
+  "seed": 1337,
+  "software": {
+    "cuda_version": "12.4",
+    "platform": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "python_implementation": "cpython",
+    "python_version": "3.12.3",
+    "torch_version": "2.6.0+cu124"
+  },
+  "step_time_ms_mean": 16.143217713288323,
+  "step_time_ms_p50": 15.799597000295762,
+  "timestamp": "2026-08-17T17:49:35.915042+00:00",
+  "tokens_per_sec": 126864.42296532894,
+  "tokens_per_step": 2048,
+  "torch_compile": false,
+  "total_step_time_s": 4.842965313986497,
+  "train_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/train_tokens.npy",
+  "training_config": {
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "device": "cuda",
+    "eval_batches": 5,
+    "eval_interval": 310,
+    "grad_accum_steps": 1,
+    "grad_clip_norm": 1.0,
+    "lr": 0.0003,
+    "max_steps": 310,
+    "micro_batch_size": 16,
+    "min_lr_ratio": 0.1,
+    "precision": "auto",
+    "seed": 1337,
+    "warmup_steps": 20,
+    "weight_decay": 0.1
+  },
+  "val_dataset_path": "/mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm/artifacts/dataset/val_tokens.npy",
+  "val_loss": 3.0417396068572997,
+  "val_loss_history": [
+    {
+      "step": 40,
+      "tokens": 81920,
+      "val_loss": 4.110005950927734
+    },
+    {
+      "step": 70,
+      "tokens": 143360,
+      "val_loss": 3.809218978881836
+    },
+    {
+      "step": 100,
+      "tokens": 204800,
+      "val_loss": 3.602819061279297
+    },
+    {
+      "step": 130,
+      "tokens": 266240,
+      "val_loss": 3.4362236976623537
+    },
+    {
+      "step": 160,
+      "tokens": 327680,
+      "val_loss": 3.299736213684082
+    },
+    {
+      "step": 190,
+      "tokens": 389120,
+      "val_loss": 3.205409574508667
+    },
+    {
+      "step": 220,
+      "tokens": 450560,
+      "val_loss": 3.136336612701416
+    },
+    {
+      "step": 250,
+      "tokens": 512000,
+      "val_loss": 3.087672233581543
+    },
+    {
+      "step": 280,
+      "tokens": 573440,
+      "val_loss": 3.0588637828826903
+    },
+    {
+      "step": 310,
+      "tokens": 634880,
+      "val_loss": 3.0417396068572997
+    }
+  ]
+}

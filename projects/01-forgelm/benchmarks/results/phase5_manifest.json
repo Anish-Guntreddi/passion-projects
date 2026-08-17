@@ -1,0 +1,24 @@
+{
+  "device": "cuda",
+  "generated_at": "2026-08-17T17:50:17.562026+00:00",
+  "num_runs": 14,
+  "run_names": [
+    "scaling_small",
+    "scaling_medium",
+    "scaling_larger",
+    "context_length_32",
+    "context_length_64",
+    "context_length_128",
+    "context_length_256",
+    "batch_size_4",
+    "batch_size_8",
+    "batch_size_16",
+    "batch_size_32",
+    "batch_size_64",
+    "compile_ab_eager",
+    "compile_ab_compiled"
+  ],
+  "skip_compile_ab": false,
+  "total_wall_clock_human": "1.54 min",
+  "total_wall_clock_s": 92.32902606100106
+}
