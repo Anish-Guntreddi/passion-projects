@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "torch>=2.4"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "flashlite"
+version = "0.1.0"
+description = "From naive attention to IO-aware fused attention: a CUDA/PyTorch kernel ladder (portfolio project 04)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Anish Guntreddi" }]
+
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "jsonschema>=4.0",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "gpu: test requires a CUDA device (skipped automatically when unavailable)",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

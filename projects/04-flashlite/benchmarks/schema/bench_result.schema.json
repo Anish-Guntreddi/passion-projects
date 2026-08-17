@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://flashlite.local/schema/bench_result.schema.json",
+  "title": "FlashLite BenchResult",
+  "description": "One committed, machine-readable benchmark measurement. Mirrors src/flashlite/bench_schema.py:BenchResult exactly (adapted from KernelForge's benchmarks/schema/bench_result.schema.json for attention's shape parameters); the two must be kept in sync by hand until/unless a code generator is introduced.",
+  "type": "object",
+  "required": [
+    "schema_version", "kernel_family", "variant", "env", "batch", "heads",
+    "seq_len", "head_dim", "causal", "dtype", "warmup_iters", "measured_reps",
+    "seed", "raw_timings_ms", "stats_ms", "bytes_moved",
+    "effective_bandwidth_gb_s", "gflops", "tolerance_atol", "tolerance_rtol",
+    "correctness_passed", "correctness_note"
+  ],
+  "properties": {
+    "schema_version": { "type": "string", "const": "1.0" },
+    "kernel_family": { "type": "string", "const": "attention" },
+    "variant": {
+      "type": "string",
+      "description": "\"v0_reference\" | \"v1_naive\" | \"v2_tiled\" | \"v3_online_softmax\" | \"v4_fused\" | \"v5_triton\" (later variants added in their own phase, additively)."
+    },
+    "description": { "type": "string" },
+    "env": {
+      "type": "object",
+      "required": [
+        "gpu_name", "compute_capability", "cuda_driver_version",
+        "cuda_runtime_version", "python_version", "torch_version",
+        "build_route_note", "locked_clocks", "clock_lock_note",
+        "observed_sm_clock_mhz", "observed_mem_clock_mhz", "os_note", "timestamp_utc"
+      ],
+      "properties": {
+        "gpu_name": { "type": "string" },
+        "compute_capability": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "cuda_driver_version": { "type": "string" },
+        "cuda_runtime_version": { "type": "string" },
+        "python_version": { "type": "string" },
+        "torch_version": { "type": "string" },
+        "build_route_note": { "type": "string" },
+        "locked_clocks": { "type": "boolean" },
+        "clock_lock_note": { "type": "string" },
+        "observed_sm_clock_mhz": { "type": "integer" },
+        "observed_mem_clock_mhz": { "type": "integer" },
+        "os_note": { "type": "string" },
+        "timestamp_utc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "batch": { "type": "integer", "minimum": 1 },
+    "heads": { "type": "integer", "minimum": 1 },
+    "seq_len": { "type": "integer", "minimum": 1 },
+    "head_dim": { "type": "integer", "minimum": 1 },
+    "causal": { "type": "boolean" },
+    "dtype": { "type": "string", "const": "fp32" },
+    "warmup_iters": { "type": "integer", "minimum": 0 },
+    "measured_reps": { "type": "integer", "minimum": 20, "description": "Mirrors KernelForge ADR 0005: >= 20 measured repetitions required for any committed result." },
+    "seed": { "type": "integer", "minimum": 0 },
+    "raw_timings_ms": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 },
+      "description": "Every individual repetition's kernel-only elapsed time. Length must equal measured_reps -- enforced as a cross-field check in scripts/validate_results.py, not expressible in draft-07 JSON Schema alone."
+    },
+    "stats_ms": {
+      "type": "object",
+      "required": ["min_ms", "max_ms", "mean_ms", "median_ms", "stddev_ms", "p25_ms", "p75_ms"],
+      "properties": {
+        "min_ms": { "type": "number" },
+        "max_ms": { "type": "number" },
+        "mean_ms": { "type": "number" },
+        "median_ms": { "type": "number" },
+        "stddev_ms": { "type": "number" },
+        "p25_ms": { "type": "number" },
+        "p75_ms": { "type": "number" }
+      }
+    },
+    "bytes_moved": { "type": "number", "minimum": 0 },
+    "effective_bandwidth_gb_s": { "type": "number", "minimum": 0 },
+    "gflops": { "type": "number", "minimum": 0 },
+    "tolerance_atol": { "type": "number", "minimum": 0 },
+    "tolerance_rtol": { "type": "number", "minimum": 0 },
+    "correctness_passed": {
+      "type": "boolean",
+      "const": true,
+      "description": "A result with correctness_passed=false must never be committed to benchmarks/raw/ -- fix the kernel first (spec hard constraint: correctness precedes speed)."
+    },
+    "correctness_note": { "type": "string" },
+    "notes": { "type": "string" }
+  }
+}

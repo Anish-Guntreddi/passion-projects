@@ -1,0 +1,14 @@
+{
+  "description": "Phase 0/1 short sweep: v0_reference vs v1_naive, a handful of representative shapes. Run by scripts/run_benchmarks.py; every point is correctness-checked against v0_reference before it is timed (a failing correctness check aborts that point rather than emitting a BenchResult). Kept intentionally short (5 shape points x 2 variants, reps=20 -- the schema's stated minimum) for Phase 0/1 evidence; the full sequence-length/head-dim sweep this project's benchmark plan (spec SS1.8) calls for is built out starting Phase 2 (memory accounting) once there is a tiled variant to compare against.",
+  "seed": 123456789,
+  "warmup_iters": 5,
+  "measured_reps": 20,
+  "points": [
+    { "variant": "reference", "batch": 1, "heads": 4, "seq_len": 128, "head_dim": 64, "causal": false },
+    { "variant": "reference", "batch": 1, "heads": 4, "seq_len": 128, "head_dim": 64, "causal": true },
+    { "variant": "reference", "batch": 2, "heads": 8, "seq_len": 512, "head_dim": 64, "causal": true },
+    { "variant": "naive",     "batch": 1, "heads": 4, "seq_len": 128, "head_dim": 64, "causal": false },
+    { "variant": "naive",     "batch": 1, "heads": 4, "seq_len": 128, "head_dim": 64, "causal": true },
+    { "variant": "naive",     "batch": 2, "heads": 8, "seq_len": 512, "head_dim": 64, "causal": true }
+  ]
+}
