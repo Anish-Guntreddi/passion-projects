@@ -12,14 +12,14 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 
 | Project | Wave | Current phase | Status | Notes |
 |---|---|---|---|---|
-| 01 ForgeLM | 1 | 4–5 | 0–3 DONE (5e0ef7c, 18090c7: 190 tests, gate-verified) · 4–5 in wave wf_3ede6770 | generation/eval + scaling experiment |
-| 02 KernelForge | 1b | 4–5 | 0–3 DONE (289480c/84a7308, 77ad541/68b54a3: 101 tests, doc numbers recomputed at gate) · 4–5 in wave wf_3ede6770 | GEMM + AI primitives; V0 reduction benchmark backfill first |
-| 03 MiniPaged | 2 | 2–3 | 0–1 DONE (235402e: 123 tests, fresh-clone verified) · 2–3 in wave wf_3ede6770 | paged KV allocator + scheduler |
+| 01 ForgeLM | 1 | 6 | 0–5 DONE (…, 67cc676/337d9d3: 263 tests, all numbers verified vs raw) · 6 (final!) in wave wf_a7589364 | portfolio hardening + fresh-clone verify |
+| 02 KernelForge | 1b | 6–7 | 0–5 DONE (…, e56704b/948ae10: 143 tests, 166 records; %-convention fixed at gate) · 6–7 in wave wf_a7589364 | profiling (ncu availability TBD, honest-disclosure fallback) + release |
+| 03 MiniPaged | 2 | 4–5 | 0–3 DONE (235402e, 5ba0bbd) · 4–5 in wave wf_a7589364 | prefix sharing/COW + real model adapter |
 | 04 FlashLite | 2 | 4–5 | 0–3 DONE (…, dd773fa/e5bd626: 161 GPU tests, L2-decay hypothesis confirmed 0.03%) · 4–5 in impl wf_e4ebcd17 | online softmax + fused IO-aware attention |
 | 05 ArcServe | 1 | 6–7 | 0–5 DONE (…, 7d47516: 187 tests × 4 sanitizers, 2 review-caught concurrency bugs fixed) · 6–7 in impl wf_e4ebcd17 | timeouts/backpressure/shutdown + observability |
-| 06 PebbleDB | 2 | 2–3 | 0–1 DONE (9550b96: 74 tests × ASan/UBSan+Release) · 2–3 in wave wf_3ede6770 | MemTable + SSTable |
-| 07 xv6-plus | 1 | 4–5 | 0–3 DONE (b8f916e, c78a9e1: QEMU suite green, zombie-filter fix) · 4–5 in wave wf_3ede6770 | scheduler experiment + VM extension |
-| 08 ReleaseGuard | 1 | 4–5 | 0–3 DONE (c15d36f, 2d6892a: live kind verified, namespace fix) · 4–5 in wave wf_3ede6770 | policy/evaluator core + release state machine |
+| 06 PebbleDB | 2 | 4–5 | 0–3 DONE (9550b96, 971b8bf: 168 tests × sanitizers) · 4–5 in wave wf_a7589364 | flush + manifest, bloom filter + cache |
+| 07 xv6-plus | 1 | 6–7 | 0–5 DONE (…, bc48c92: lottery sched + lazy VM, usertests 223.5s) · 6–7 in wave wf_a7589364 | stress/race hardening + observability report |
+| 08 ReleaseGuard | 1 | 6–7 | 0–5 DONE (…, 4f45a23: controller 80 tests, CI covers both modules) · 6–7 in wave wf_a7589364 | k8s action adapter + failure scenarios |
 | 09 Helios | 3 | — | waiting (capstone) | must be last |
 | Showcase site | 4 | — | waiting (all) | GitHub Pages |
 
