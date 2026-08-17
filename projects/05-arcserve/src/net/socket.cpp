@@ -1,6 +1,7 @@
 #include "arcserve/net/socket.hpp"
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 
@@ -19,7 +20,7 @@ namespace {
 
 }  // namespace
 
-TcpListener TcpListener::listen(std::uint16_t port, int backlog) {
+TcpListener TcpListener::listen(std::uint16_t port, int backlog, bool nonblocking) {
   FileDescriptor fd(::socket(AF_INET, SOCK_STREAM, 0));
   if (!fd) {
     throw_errno("socket");
@@ -51,6 +52,15 @@ TcpListener TcpListener::listen(std::uint16_t port, int backlog) {
     throw_errno("getsockname");
   }
 
+  // Put the *listening* socket itself into O_NONBLOCK before returning, per
+  // this parameter's contract (see socket.hpp): accept_nonblocking() relies
+  // on accept(2) against a nonblocking fd returning EAGAIN instead of
+  // blocking when the backlog is empty — there is no separate "nonblocking
+  // accept" syscall; the nonblocking-ness comes entirely from this flag.
+  if (nonblocking) {
+    set_nonblocking(fd.get());
+  }
+
   return TcpListener(std::move(fd), ntohs(addr.sin_port));
 }
 
@@ -62,6 +72,30 @@ FileDescriptor TcpListener::accept() const {
     }
     if (errno == EINTR) {
       continue;
+    }
+    throw_errno("accept");
+  }
+}
+
+std::optional<FileDescriptor> TcpListener::accept_nonblocking() const {
+  for (;;) {
+    int client_fd = ::accept(fd_.get(), nullptr, nullptr);
+    if (client_fd >= 0) {
+      // accept(2) does not inherit O_NONBLOCK from the listening socket —
+      // the returned fd is a fresh one, independently flagged. Set it
+      // explicitly so callers never have to (see this method's docs).
+      FileDescriptor client(client_fd);
+      set_nonblocking(client.get());
+      return client;
+    }
+    if (errno == EINTR) {
+      continue;  // transient signal interruption, not "nothing pending" — retry the same call.
+    }
+    if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EMFILE || errno == ENFILE ||
+        errno == ECONNABORTED || errno == EPROTO) {
+      // See this method's docs for why each of these is "nothing to accept
+      // right now" rather than a thrown SocketError.
+      return std::nullopt;
     }
     throw_errno("accept");
   }
@@ -89,6 +123,32 @@ FileDescriptor connect_loopback(std::uint16_t port) {
     }
     throw_errno("connect");
   }
+}
+
+void set_nonblocking(int fd) {
+  int flags = ::fcntl(fd, F_GETFL, 0);
+  if (flags == -1) {
+    throw_errno("fcntl(F_GETFL)");
+  }
+  if ((flags & O_NONBLOCK) != 0) {
+    return;  // already nonblocking; avoid a redundant syscall
+  }
+  if (::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+    throw_errno("fcntl(F_SETFL)");
+  }
+}
+
+std::string describe_peer(int fd) noexcept {
+  sockaddr_in addr{};
+  socklen_t addr_len = sizeof(addr);
+  if (::getpeername(fd, reinterpret_cast<sockaddr*>(&addr), &addr_len) != 0) {
+    return "unknown";
+  }
+  char ip_buf[INET_ADDRSTRLEN] = {};
+  if (::inet_ntop(AF_INET, &addr.sin_addr, ip_buf, sizeof(ip_buf)) == nullptr) {
+    return "unknown";
+  }
+  return std::string(ip_buf) + ":" + std::to_string(ntohs(addr.sin_port));
 }
 
 IoResult read_some(int fd, void* buffer, std::size_t capacity) noexcept {

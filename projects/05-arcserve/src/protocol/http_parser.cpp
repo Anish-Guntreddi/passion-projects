@@ -90,7 +90,23 @@ HttpRequestParser::StepResult HttpRequestParser::parse_request_line(std::string_
 
   // No terminator yet in this chunk (and the boundary case above didn't
   // apply). Buffer everything we have, bounded, and wait for more.
-  if (line_buffer_.size() + data.size() > kMaxRequestLineLength) {
+  //
+  // Exception: if `data` is exactly a single trailing '\r', it might be the
+  // first half of the terminating CRLF, split across TCP segments (a lone
+  // '\r' now, its pairing '\n' next call) — the boundary-consuming branch
+  // at the top of this function excludes a terminator's own '\r' from the
+  // line's actual content once its '\n' arrives, so that '\r' must not be
+  // charged against the cap here either. Without this, a request line whose
+  // real content lands exactly at kMaxRequestLineLength is wrongly rejected
+  // purely because its CRLF happened to arrive split rather than whole
+  // (mirrors parse_headers()'s identical `pending_could_still_be_terminator`
+  // guard for the header-block terminator). If the next byte turns out not
+  // to be '\n', that '\r' really was content instead, and this same check —
+  // now with it already included in line_buffer_ — catches any true
+  // overflow on the very next call.
+  bool pending_could_be_terminator_start = data.size() == 1 && data.front() == '\r';
+  if (!pending_could_be_terminator_start &&
+      line_buffer_.size() + data.size() > kMaxRequestLineLength) {
     return fail_step(400, "Bad Request", "request line exceeds limit\n");
   }
   line_buffer_.append(data);
@@ -217,6 +233,22 @@ HttpRequestParser::StepResult HttpRequestParser::parse_headers(std::string_view&
 HttpRequestParser::StepResult HttpRequestParser::consume_header_line(std::string_view line) {
   if (line.empty()) {
     return finish_headers();
+  }
+
+  // RFC 9110 §5.5 forbids CR, LF, and NUL inside a field value; this
+  // parser's line scanner (parse_headers(), above) only recognizes the
+  // literal 2-byte "\r\n" sequence as a line terminator, so a bare CR or LF
+  // that isn't part of an actual CRLF pair survives into `line` unrejected
+  // instead. Left unchecked, a request like
+  // "Content-Type: text/plain\nSet-Cookie: admin=true\r\n" parses as one
+  // header whose value carries an embedded LF, and any handler that
+  // reflects that value back into a response header (e.g. default_route's
+  // /echo route) hands the client a way to inject an extra header/status
+  // line into ArcServe's own response (CWE-113, HTTP response splitting).
+  // Reject outright, matching FR3's "malformed input is rejected
+  // predictably".
+  if (line.find('\r') != std::string_view::npos || line.find('\n') != std::string_view::npos) {
+    return fail_step(400, "Bad Request", "malformed header line\n");
   }
 
   auto colon = line.find(':');

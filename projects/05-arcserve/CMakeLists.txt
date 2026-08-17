@@ -45,8 +45,11 @@ add_library(arcserve_core
   src/net/socket.cpp
   src/protocol/http_message.cpp
   src/protocol/http_parser.cpp
+  src/reactor/epoll_reactor.cpp
   src/server/blocking_server.cpp
   src/server/default_handlers.cpp
+  src/server/echo_reactor_server.cpp
+  src/server/nonblocking_http_server.cpp
 )
 target_include_directories(arcserve_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

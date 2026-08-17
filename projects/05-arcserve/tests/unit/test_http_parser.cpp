@@ -153,6 +153,52 @@ TEST(HttpRequestParserTest, RejectsOversizedRequestLine) {
   EXPECT_EQ(parser.error_response().status_code, 400);
 }
 
+// Boundary regression: a request line whose real content (measured before
+// its CRLF, per docs/protocol-scope.md) is exactly kMaxRequestLineLength
+// must be accepted even when the CRLF itself arrives split across feed()
+// calls — a lone '\r' in one call, its pairing '\n' in the next. The buggy
+// version of this check charged every byte of a newly-arrived chunk
+// (including a not-yet-resolved lone '\r') against the cap before knowing
+// whether it was real content or the start of the terminator, wrongly
+// rejecting this exact case with 400. Mirrors
+// AcceptsHeaderBytesExactlyAtCapWhenTerminatorArrivesSeparately's coverage
+// of the identical bug class for the header-block terminator.
+TEST(HttpRequestParserTest, AcceptsRequestLineExactlyAtCapWhenCrlfArrivesSplit) {
+  HttpRequestParser parser;
+  constexpr std::string_view kPrefix = "GET /";
+  constexpr std::string_view kSuffix = " HTTP/1.1";
+  const std::string target(
+      HttpRequestParser::kMaxRequestLineLength - kPrefix.size() - kSuffix.size(), 'a');
+  const std::string line = std::string(kPrefix) + target + std::string(kSuffix);
+  ASSERT_EQ(line.size(), HttpRequestParser::kMaxRequestLineLength);
+
+  std::string_view first = line;
+  ASSERT_EQ(parser.feed(first), ParseStatus::kNeedMoreData);
+
+  std::string_view cr = "\r";
+  ASSERT_EQ(parser.feed(cr), ParseStatus::kNeedMoreData);
+
+  std::string_view lf_and_terminator = "\n\r\n";  // completes the request line, then ends headers
+  ASSERT_EQ(parser.feed(lf_and_terminator), ParseStatus::kComplete);
+}
+
+// Sibling of the above: the split-CRLF leniency must not become a genuine
+// bypass — a request line one byte *over* the cap must still be rejected
+// even when probed via the same lone-'\r'-chunk delivery pattern.
+TEST(HttpRequestParserTest, RejectsRequestLineOneOverCapWhenCrlfArrivesSplit) {
+  HttpRequestParser parser;
+  constexpr std::string_view kPrefix = "GET /";
+  constexpr std::string_view kSuffix = " HTTP/1.1";
+  const std::string target(
+      HttpRequestParser::kMaxRequestLineLength - kPrefix.size() - kSuffix.size() + 1, 'a');
+  const std::string line = std::string(kPrefix) + target + std::string(kSuffix);
+  ASSERT_EQ(line.size(), HttpRequestParser::kMaxRequestLineLength + 1);
+
+  std::string_view first = line;
+  ASSERT_EQ(parser.feed(first), ParseStatus::kError);
+  EXPECT_EQ(parser.error_response().status_code, 400);
+}
+
 TEST(HttpRequestParserTest, RejectsTooManyHeaders) {
   HttpRequestParser parser;
   std::string request = "GET / HTTP/1.1\r\n";
@@ -293,6 +339,32 @@ TEST(HttpRequestParserTest, RejectsDuplicateContentLengthAcrossDifferingCase) {
 TEST(HttpRequestParserTest, RejectsMalformedHeaderLine) {
   HttpRequestParser parser;
   std::string_view data = "GET / HTTP/1.1\r\nNoColonHere\r\n\r\n";
+  ASSERT_EQ(parser.feed(data), ParseStatus::kError);
+  EXPECT_EQ(parser.error_response().status_code, 400);
+}
+
+// CWE-113 regression: the line scanner in parse_headers() only recognizes a
+// literal "\r\n" pair as a line terminator, so a bare LF embedded in a
+// header value (not part of an actual CRLF) used to survive into the
+// stored header value unrejected — "Content-Type: text/plain\nSet-Cookie:
+// admin=true\r\n" parsed as ONE header whose value carried the embedded LF
+// intact. A handler that reflects that value back into a response header
+// (default_route's /echo route does exactly this for Content-Type) would
+// then hand the client a way to inject an extra header/status line into
+// ArcServe's own response. RFC 9110 §5.5 forbids CR/LF/NUL in field
+// values; this must be rejected outright, not silently accepted.
+TEST(HttpRequestParserTest, RejectsHeaderValueWithEmbeddedBareLf) {
+  HttpRequestParser parser;
+  std::string_view data =
+      "GET / HTTP/1.1\r\nContent-Type: text/plain\nSet-Cookie: admin=true\r\n\r\n";
+  ASSERT_EQ(parser.feed(data), ParseStatus::kError);
+  EXPECT_EQ(parser.error_response().status_code, 400);
+}
+
+// Same class of injection, via a bare embedded CR instead of a bare LF.
+TEST(HttpRequestParserTest, RejectsHeaderValueWithEmbeddedBareCr) {
+  HttpRequestParser parser;
+  std::string_view data = "GET / HTTP/1.1\r\nX-Test: a\rInjected: yes\r\n\r\n";
   ASSERT_EQ(parser.feed(data), ParseStatus::kError);
   EXPECT_EQ(parser.error_response().status_code, 400);
 }

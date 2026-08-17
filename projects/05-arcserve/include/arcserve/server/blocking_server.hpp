@@ -3,20 +3,13 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 
 #include "arcserve/net/file_descriptor.hpp"
 #include "arcserve/net/socket.hpp"
 #include "arcserve/protocol/http_message.hpp"
+#include "arcserve/server/request_handler.hpp"
 
 namespace arcserve::server {
-
-// Given a fully-parsed request, produce the response to send. Invoked
-// synchronously on the connection-handling call stack — there is no worker
-// pool yet (that's Phase 5); a slow handler blocks only the connection
-// currently being served, since connections are handled one at a time to
-// completion (see BlockingHttpServer below).
-using RequestHandler = std::function<protocol::HttpResponse(const protocol::HttpRequest&)>;
 
 // A deliberately single-threaded, blocking, one-connection-at-a-time
 // TCP/HTTP server. Its purpose is to validate protocol and parser
