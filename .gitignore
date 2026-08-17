@@ -1,6 +1,42 @@
-# Claude Code session history (local only)
-.remember/
-.claude/
+# Python
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
 
-# OS cruft
+# C/C++/CUDA
+build/
+cmake-build-*/
+*.o
+*.obj
+*.so
+*.a
+*.exe
+
+# Go
+/projects/**/bin/
+
+# Large training/data artifacts (benchmark RESULT files are committed; raw data and weights are not)
+projects/**/data/
+projects/**/checkpoints/
+projects/**/*.pt
+projects/**/*.bin
+!projects/**/tests/**/*.bin
+
+# Node
+node_modules/
+
+# Editor/OS
 .DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Scratch
+.context/
+*.log
