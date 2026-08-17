@@ -1,6 +1,8 @@
 # ADR 0003: Traffic-splitting mechanism is replica-count-based
 
-**Status:** Accepted (implementation lands in Phase 3, not this change)
+**Status:** Accepted; implemented in Phase 3
+(`deploy/kubernetes/base/deployment-canary.yaml`,
+`service-shared.yaml`)
 **Decision ID:** D2 (spec §1.9)
 **Date:** 2026-08-17
 

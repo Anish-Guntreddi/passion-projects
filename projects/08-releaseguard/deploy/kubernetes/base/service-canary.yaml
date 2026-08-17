@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-service-canary
+  labels:
+    app.kubernetes.io/name: demo-service
+    app.kubernetes.io/instance: canary
+spec:
+  type: ClusterIP
+  # Selects only the canary track's pods -- mirrors service.yaml
+  # (demo-service-stable), giving each track a direct, single-track
+  # address for smoke-testing and debugging in isolation. The
+  # traffic-split mechanism itself (ADR 0003) is service-shared.yaml, not
+  # this Service.
+  selector:
+    app.kubernetes.io/name: demo-service
+    app.kubernetes.io/instance: canary
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

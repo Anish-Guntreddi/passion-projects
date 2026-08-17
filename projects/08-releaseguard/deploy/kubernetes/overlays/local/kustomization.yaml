@@ -3,6 +3,12 @@ kind: Kustomization
 
 resources:
   - ../../base
+  # Phase 2 (Telemetry): OTel Collector (traces) + Prometheus (metrics
+  # scrape/query), deployed alongside the stable track by the same single
+  # `make cluster-up` command -- see ADR 0009 and each directory's
+  # kustomization.yaml/manifests for why they're split this way.
+  - ../../../../observability/otel
+  - ../../../../observability/prometheus
 
 # Pin the image tag to what deploy/local-cluster/setup-cluster.sh builds
 # and loads directly into the kind node via `kind load docker-image`. Kind

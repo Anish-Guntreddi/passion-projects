@@ -1,0 +1,67 @@
+# Prometheus scrape configuration for ReleaseGuard's local environment
+# (Phase 2: Telemetry).
+#
+# Discovery is Kubernetes-native (kubernetes_sd_configs, role: pod) rather
+# than a static target list, so it automatically picks up demo-service
+# pods regardless of which track/version they run or how many replicas
+# exist -- this is what makes Phase 3's canary Deployment "just show up"
+# in Prometheus with zero changes to this config (per ADR 0003: the split
+# mechanism is replica count, and Prometheus does not need to know the
+# split ratio, only which pods to scrape).
+#
+# Track/version differentiation itself does NOT come from relabeling pod
+# labels -- it comes from the metrics themselves, which already carry
+# `track`/`version` as Prometheus labels (internal/server/metrics.go).
+# This scrape config's only job is "find every demo-service pod and hit
+# its /metrics endpoint"; PromQL queries filter on `track`/`version`
+# directly, e.g.:
+#
+#   histogram_quantile(0.95, sum by (le) (
+#     rate(http_request_duration_seconds_bucket{track="canary"}[1m])))
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+
+    scrape_configs:
+      - job_name: demo-service
+        kubernetes_sd_configs:
+          - role: pod
+            namespaces:
+              names: ["releaseguard"]
+        relabel_configs:
+          # Only scrape pods that opted in via annotation (both
+          # demo-service-stable and demo-service-canary set this; the
+          # otel-collector and prometheus's own pods do not).
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          # Kept as extra Prometheus labels (k8s_* prefix, distinct from
+          # the app-reported `track`/`version` labels above) purely for
+          # cross-checking "does the app's self-reported track match the
+          # Kubernetes label a human would see in `kubectl get pods
+          # --show-labels`" -- useful when debugging a misconfigured
+          # rollout, not required for evaluator queries.
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: k8s_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: k8s_pod
+          - source_labels: [__meta_kubernetes_pod_label_release_releaseguard_track]
+            target_label: k8s_track
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_instance]
+            target_label: k8s_instance

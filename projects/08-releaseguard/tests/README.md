@@ -13,9 +13,11 @@ currently empty.
 | Directory | Populated by | Status |
 |---|---|---|
 | `unit/` | (reserved; Go unit tests are co-located with source instead) | empty |
-| `integration/` | Phase 2+ (Prometheus query adapter), Phase 6 (Kubernetes adapter with fake client) | empty |
-| `e2e/` | Phase 1 (this change): `smoke_test.sh` | **populated** |
+| `integration/` | Phase 4 (Prometheus query adapter), Phase 6 (Kubernetes adapter with fake client) | empty |
+| `e2e/` | Phase 1: `smoke_test.sh`; Phase 3: `canary_smoke_test.sh` | **populated** |
 | `failure/` | Phase 7 (scripted latency/error/missing-telemetry/saturation injection) | empty |
 
-Run `make test` (from the project root) for the Go unit test suite, and
-`make cluster-up` / `make smoke-test` for the Phase 1 e2e check.
+Run `make test` (from the project root) for the Go unit test suite,
+`make cluster-up` to deploy both tracks and run both e2e smoke tests, or
+`make smoke-test` / `make smoke-test-canary` individually against
+whatever cluster is already current.

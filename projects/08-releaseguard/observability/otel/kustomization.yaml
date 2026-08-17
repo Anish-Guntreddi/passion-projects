@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Declared here (not just inherited from a parent overlay) so this
+# directory renders correctly even when applied on its own, matching
+# deploy/kubernetes/base/kustomization.yaml's own pattern.
+namespace: releaseguard
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml

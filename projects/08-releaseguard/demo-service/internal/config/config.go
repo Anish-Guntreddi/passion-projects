@@ -62,20 +62,41 @@ type Config struct {
 	// The allocation is visible via the Go runtime metrics exposed on
 	// /metrics (go_memstats_alloc_bytes etc.).
 	MemoryPressureMB int
+
+	// OTLPExporterEndpoint is the host:port of an OTLP/HTTP collector that
+	// trace spans are exported to (e.g. "otel-collector.releaseguard.svc.
+	// cluster.local:4318"). Empty disables trace export entirely -- the
+	// service still creates spans internally (so handler code never has to
+	// branch on whether tracing is "on"), it just uses a no-op provider
+	// that discards them instead of touching the network. This is what
+	// lets `go run`/`go test` behave identically with or without a
+	// collector nearby, mirroring how every other fault-injection knob
+	// here defaults to "off"/harmless.
+	OTLPExporterEndpoint string
+
+	// OTELTracesSampleRatio is the fraction (in [0,1]) of traces sampled
+	// when tracing is enabled (OTLPExporterEndpoint is set). Ignored when
+	// tracing is disabled. 1.0 (sample everything) is the default -- this
+	// is a demo service used to generate small, deliberately-inspectable
+	// failure scenarios, not a high-QPS production service, so there is no
+	// cardinality/cost reason to sample less than everything.
+	OTELTracesSampleRatio float64
 }
 
 // defaults returns a Config representing a healthy, stable instance.
 func defaults() Config {
 	return Config{
-		Port:             8080,
-		ReleaseTrack:     TrackStable,
-		ReleaseVersion:   "dev",
-		BaseLatencyMS:    20,
-		LatencyJitterMS:  10,
-		ExtraLatencyMS:   0,
-		ErrorRate:        0.0,
-		DependencyDown:   false,
-		MemoryPressureMB: 0,
+		Port:                  8080,
+		ReleaseTrack:          TrackStable,
+		ReleaseVersion:        "dev",
+		BaseLatencyMS:         20,
+		LatencyJitterMS:       10,
+		ExtraLatencyMS:        0,
+		ErrorRate:             0.0,
+		DependencyDown:        false,
+		MemoryPressureMB:      0,
+		OTLPExporterEndpoint:  "",
+		OTELTracesSampleRatio: 1.0,
 	}
 }
 
@@ -162,6 +183,18 @@ func Load(getenv Getenv) (Config, error) {
 			return Config{}, fmt.Errorf("config: MEMORY_PRESSURE_MB %w", err)
 		}
 		cfg.MemoryPressureMB = n
+	}
+
+	if v := getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
+		cfg.OTLPExporterEndpoint = v
+	}
+
+	if v := getenv("OTEL_TRACES_SAMPLE_RATIO"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil || f < 0 || f > 1 {
+			return Config{}, fmt.Errorf("config: OTEL_TRACES_SAMPLE_RATIO must be a float in [0,1], got %q", v)
+		}
+		cfg.OTELTracesSampleRatio = f
 	}
 
 	return cfg, nil

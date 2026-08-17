@@ -7,3 +7,10 @@ resources:
   - namespace.yaml
   - deployment.yaml
   - service.yaml
+  # Phase 3 (Manual canary): a second track alongside stable, plus the
+  # two Services that make ADR 0003's replica-count traffic split real --
+  # service-canary.yaml (canary-only, for isolated smoke-testing) and
+  # service-shared.yaml (both tracks, the actual split mechanism).
+  - deployment-canary.yaml
+  - service-canary.yaml
+  - service-shared.yaml

@@ -7,6 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+
 	"releaseguard/demo-service/internal/dependency"
 	"releaseguard/demo-service/internal/version"
 )
@@ -116,6 +120,16 @@ func (s *Server) handleWork(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// A dedicated child span for the dependency call, distinct from the
+	// request-level span `instrument` already opened, is what makes a
+	// trace for /work actually useful for diagnosing *where* time or
+	// failures came from -- "the handler was slow" vs "the dependency was
+	// slow" are different incidents, and a flat single-span trace can't
+	// tell them apart.
+	_, depSpan := s.tracer.Start(r.Context(), "dependency.call", trace.WithAttributes(
+		attribute.Float64("dependency.error_rate", s.cfg.ErrorRate),
+		attribute.Bool("dependency.forced_down", s.cfg.DependencyDown),
+	))
 	err := s.dep.Call(s.cfg.ErrorRate, s.cfg.DependencyDown)
 	elapsed := time.Since(start)
 
@@ -124,6 +138,11 @@ func (s *Server) handleWork(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, dependency.ErrDown) {
 			reason = "down"
 		}
+		depSpan.RecordError(err)
+		depSpan.SetStatus(codes.Error, reason)
+		depSpan.SetAttributes(attribute.String("dependency.failure_reason", reason))
+		depSpan.End()
+
 		s.metrics.DependencyFailuresTotal.WithLabelValues(reason, s.cfg.ReleaseVersion, string(s.cfg.ReleaseTrack)).Inc()
 
 		writeJSON(w, http.StatusServiceUnavailable, workErrorResponse{
@@ -132,6 +151,7 @@ func (s *Server) handleWork(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	depSpan.End()
 
 	writeJSON(w, http.StatusOK, workResponse{
 		Result:    "ok",

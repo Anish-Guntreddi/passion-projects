@@ -15,8 +15,11 @@ import (
 
 // newTestServer builds a Server with sane, fast-for-testing defaults, then
 // applies overrides. Latency knobs default to zero so unit tests don't pay
-// real wall-clock sleep time.
-func newTestServer(t *testing.T, overrides func(*config.Config)) *Server {
+// real wall-clock sleep time. opts is forwarded to New unchanged -- most
+// tests pass none (getting the default no-op tracer), but tests asserting
+// on span content (tracing_test.go) pass WithTracerProvider with an
+// in-memory recorder.
+func newTestServer(t *testing.T, overrides func(*config.Config), opts ...Option) *Server {
 	t.Helper()
 	cfg := config.Config{
 		Port:             8080,
@@ -33,7 +36,7 @@ func newTestServer(t *testing.T, overrides func(*config.Config)) *Server {
 		overrides(&cfg)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return New(cfg, logger)
+	return New(cfg, logger, opts...)
 }
 
 func decodeJSON[T any](t *testing.T, body io.Reader) T {

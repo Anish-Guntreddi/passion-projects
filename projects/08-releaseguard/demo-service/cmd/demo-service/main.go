@@ -18,6 +18,7 @@ import (
 
 	"releaseguard/demo-service/internal/config"
 	"releaseguard/demo-service/internal/server"
+	"releaseguard/demo-service/internal/telemetry"
 	"releaseguard/demo-service/internal/version"
 )
 
@@ -34,7 +35,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := server.New(cfg, logger)
+	info := version.Current()
+
+	tp, shutdownTracing, err := telemetry.NewTracerProvider(context.Background(), telemetry.Config{
+		ServiceName:          "releaseguard-demo-service",
+		ServiceVersion:       info.Version,
+		ReleaseTrack:         string(cfg.ReleaseTrack),
+		ReleaseVersion:       cfg.ReleaseVersion,
+		OTLPExporterEndpoint: cfg.OTLPExporterEndpoint,
+		SampleRatio:          cfg.OTELTracesSampleRatio,
+	})
+	if err != nil {
+		// Same principle as config validation above: a tracing setup that
+		// can't be trusted must fail loudly at startup, not silently run
+		// with a half-configured exporter.
+		logger.Error("failed to initialize tracing", "error", err)
+		os.Exit(1)
+	}
+
+	srv := server.New(cfg, logger, server.WithTracerProvider(tp))
 
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
@@ -42,7 +61,6 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	info := version.Current()
 	logger.Info("starting demo-service",
 		"port", cfg.Port,
 		"track", cfg.ReleaseTrack,
@@ -50,6 +68,7 @@ func main() {
 		"image_version", info.Version,
 		"git_commit", info.GitCommit,
 		"build_time", info.BuildTime,
+		"otlp_endpoint", cfg.OTLPExporterEndpoint,
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -74,6 +93,17 @@ func main() {
 			logger.Error("graceful shutdown failed", "error", err)
 			os.Exit(1)
 		}
+	}
+
+	// Flush any spans still buffered in the batch processor. This is
+	// best-effort: a failed flush (e.g. the collector is also mid-restart)
+	// is worth logging but must not turn an otherwise-clean shutdown into
+	// a failed one -- losing the tail of trace data is a much smaller
+	// problem than a rolling deployment's pods failing to terminate.
+	tracingShutdownCtx, tracingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer tracingCancel()
+	if err := shutdownTracing(tracingShutdownCtx); err != nil {
+		logger.Warn("tracing shutdown did not complete cleanly", "error", err)
 	}
 
 	logger.Info("demo-service stopped")

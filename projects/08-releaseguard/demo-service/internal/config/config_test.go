@@ -20,15 +20,17 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 
 	want := Config{
-		Port:             8080,
-		ReleaseTrack:     TrackStable,
-		ReleaseVersion:   "dev",
-		BaseLatencyMS:    20,
-		LatencyJitterMS:  10,
-		ExtraLatencyMS:   0,
-		ErrorRate:        0.0,
-		DependencyDown:   false,
-		MemoryPressureMB: 0,
+		Port:                  8080,
+		ReleaseTrack:          TrackStable,
+		ReleaseVersion:        "dev",
+		BaseLatencyMS:         20,
+		LatencyJitterMS:       10,
+		ExtraLatencyMS:        0,
+		ErrorRate:             0.0,
+		DependencyDown:        false,
+		MemoryPressureMB:      0,
+		OTLPExporterEndpoint:  "",
+		OTELTracesSampleRatio: 1.0,
 	}
 	if cfg != want {
 		t.Fatalf("Load() defaults = %+v, want %+v", cfg, want)
@@ -37,15 +39,17 @@ func TestLoad_Defaults(t *testing.T) {
 
 func TestLoad_ValidOverrides(t *testing.T) {
 	cfg, err := Load(fakeEnv(map[string]string{
-		"PORT":               "9090",
-		"RELEASE_TRACK":      "canary",
-		"RELEASE_VERSION":    "v1.2.3",
-		"BASE_LATENCY_MS":    "50",
-		"LATENCY_JITTER_MS":  "5",
-		"EXTRA_LATENCY_MS":   "500",
-		"ERROR_RATE":         "0.25",
-		"DEPENDENCY_DOWN":    "true",
-		"MEMORY_PRESSURE_MB": "16",
+		"PORT":                        "9090",
+		"RELEASE_TRACK":               "canary",
+		"RELEASE_VERSION":             "v1.2.3",
+		"BASE_LATENCY_MS":             "50",
+		"LATENCY_JITTER_MS":           "5",
+		"EXTRA_LATENCY_MS":            "500",
+		"ERROR_RATE":                  "0.25",
+		"DEPENDENCY_DOWN":             "true",
+		"MEMORY_PRESSURE_MB":          "16",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "otel-collector.releaseguard.svc.cluster.local:4318",
+		"OTEL_TRACES_SAMPLE_RATIO":    "0.5",
 	}))
 	if err != nil {
 		t.Fatalf("Load() returned unexpected error: %v", err)
@@ -78,6 +82,12 @@ func TestLoad_ValidOverrides(t *testing.T) {
 	if cfg.MemoryPressureMB != 16 {
 		t.Errorf("MemoryPressureMB = %d, want 16", cfg.MemoryPressureMB)
 	}
+	if cfg.OTLPExporterEndpoint != "otel-collector.releaseguard.svc.cluster.local:4318" {
+		t.Errorf("OTLPExporterEndpoint = %q, want otel-collector.releaseguard.svc.cluster.local:4318", cfg.OTLPExporterEndpoint)
+	}
+	if math.Abs(cfg.OTELTracesSampleRatio-0.5) > 1e-9 {
+		t.Errorf("OTELTracesSampleRatio = %v, want 0.5", cfg.OTELTracesSampleRatio)
+	}
 }
 
 func TestLoad_ReleaseTrackCaseInsensitive(t *testing.T) {
@@ -108,6 +118,9 @@ func TestLoad_InvalidValues(t *testing.T) {
 		{"error rate not a number", map[string]string{"ERROR_RATE": "high"}},
 		{"dependency down not a bool", map[string]string{"DEPENDENCY_DOWN": "maybe"}},
 		{"negative memory pressure", map[string]string{"MEMORY_PRESSURE_MB": "-1"}},
+		{"sample ratio below zero", map[string]string{"OTEL_TRACES_SAMPLE_RATIO": "-0.1"}},
+		{"sample ratio above one", map[string]string{"OTEL_TRACES_SAMPLE_RATIO": "1.1"}},
+		{"sample ratio not a number", map[string]string{"OTEL_TRACES_SAMPLE_RATIO": "always"}},
 	}
 
 	for _, tc := range cases {

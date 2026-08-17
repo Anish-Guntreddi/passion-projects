@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-service
+  labels:
+    app.kubernetes.io/name: demo-service
+spec:
+  type: ClusterIP
+  # This is ADR 0003's traffic-split mechanism: selecting on the shared
+  # `app.kubernetes.io/name: demo-service` label only (no
+  # `app.kubernetes.io/instance` filter) means this single Service's
+  # Endpoints include every stable AND canary pod. kube-proxy load-balances
+  # across all of them roughly uniformly, so the stable:canary REPLICA
+  # ratio (deployment.yaml's `replicas: 2` vs deployment-canary.yaml's
+  # `replicas: 1`) is what determines the approximate traffic split -- no
+  # service mesh, ingress controller, or extra CRDs required. See ADR 0003
+  # for the full rationale and its accepted imprecision.
+  selector:
+    app.kubernetes.io/name: demo-service
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

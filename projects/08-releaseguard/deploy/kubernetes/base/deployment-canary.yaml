@@ -1,23 +1,30 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: demo-service-stable
+  name: demo-service-canary
   labels:
     app.kubernetes.io/name: demo-service
-    app.kubernetes.io/instance: stable
-    release.releaseguard/track: stable
+    app.kubernetes.io/instance: canary
+    release.releaseguard/track: canary
 spec:
-  replicas: 2
+  # 1 canary replica alongside demo-service-stable's 2 gives a coarse ~33%
+  # canary share of the shared Service's traffic (see service-shared.yaml
+  # and ADR 0003) -- a real, observable split without adding a service
+  # mesh or ingress-level weighted routing. Phase 3 is "manual canary":
+  # a human (via deploy/local-cluster/canary-scenario.sh) decides when
+  # this track looks unhealthy; nothing here scales replicas
+  # automatically yet -- that lever is Phase 6's Kubernetes adapter.
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: demo-service
-      app.kubernetes.io/instance: stable
+      app.kubernetes.io/instance: canary
   template:
     metadata:
       labels:
         app.kubernetes.io/name: demo-service
-        app.kubernetes.io/instance: stable
-        release.releaseguard/track: stable
+        app.kubernetes.io/instance: canary
+        release.releaseguard/track: canary
       annotations:
         # Read by observability/prometheus's kubernetes_sd_configs
         # (role: pod) scrape config -- see that ConfigMap's comments. The
@@ -59,9 +66,28 @@ spec:
             - name: PORT
               value: "8080"
             - name: RELEASE_TRACK
-              value: "stable"
+              value: "canary"
+            # Deliberately a different value than the stable track's
+            # v1.0.0 -- FR3 requires latency/errors/version to be
+            # queryable *per stable/canary identity*, which this manifest
+            # exercises end to end (RELEASE_VERSION -> /version and every
+            # Prometheus series's `version` label -> PromQL filters like
+            # http_requests_total{version="v1.1.0"}).
             - name: RELEASE_VERSION
-              value: "v1.0.0"
+              value: "v1.1.0"
+            # Starts identical to the stable track's fault-injection
+            # config (i.e. healthy) so a fresh `make cluster-up` produces
+            # a healthy canary by default. Use
+            # deploy/local-cluster/canary-scenario.sh to flip this track
+            # to an unhealthy configuration on demand -- see that script
+            # for why this is the deliberately manual (not automated)
+            # lever Phase 3 calls for.
+            - name: ERROR_RATE
+              value: "0.0"
+            - name: EXTRA_LATENCY_MS
+              value: "0"
+            - name: DEPENDENCY_DOWN
+              value: "false"
             # Points at observability/otel's Collector Service. Trace
             # export is best-effort (internal/telemetry.NewTracerProvider
             # batches asynchronously and never blocks a request on it), so

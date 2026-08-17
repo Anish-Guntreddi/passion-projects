@@ -4,7 +4,7 @@
 # README.md; nothing here is "the" reproducibility mechanism, it just
 # saves typing. Run `make help` for a summary.
 
-.PHONY: help build test vet run docker-build cluster-up cluster-down smoke-test tidy fmt clean
+.PHONY: help build test vet run docker-build cluster-up cluster-down smoke-test smoke-test-canary canary-healthy canary-unhealthy tidy fmt clean
 
 DEMO_DIR := demo-service
 IMAGE    := releaseguard/demo-service:local
@@ -15,11 +15,14 @@ help:
 	@echo "make test          - go vet + go test (race, cover) for demo-service"
 	@echo "make run           - go run the demo-service locally (PORT=8080 by default)"
 	@echo "make docker-build  - build the demo-service container image ($(IMAGE))"
-	@echo "make cluster-up    - create/reuse local kind cluster, deploy stable, run smoke test"
-	@echo "make cluster-down  - delete the local kind cluster"
-	@echo "make smoke-test    - run tests/e2e/smoke_test.sh against whatever cluster is current"
-	@echo "make tidy          - go mod tidy for demo-service"
-	@echo "make fmt           - gofmt demo-service"
+	@echo "make cluster-up       - create/reuse local kind cluster, deploy stable+canary, run smoke tests"
+	@echo "make cluster-down     - delete the local kind cluster"
+	@echo "make smoke-test       - run tests/e2e/smoke_test.sh (stable) against whatever cluster is current"
+	@echo "make smoke-test-canary - run tests/e2e/canary_smoke_test.sh (canary + split routing)"
+	@echo "make canary-healthy   - flip demo-service-canary to a healthy config (see canary-scenario.sh)"
+	@echo "make canary-unhealthy - flip demo-service-canary to an unhealthy config (see canary-scenario.sh)"
+	@echo "make tidy             - go mod tidy for demo-service"
+	@echo "make fmt              - gofmt demo-service"
 
 build:
 	cd $(DEMO_DIR) && go build -o bin/demo-service ./cmd/demo-service
@@ -44,6 +47,15 @@ cluster-down:
 
 smoke-test:
 	./tests/e2e/smoke_test.sh
+
+smoke-test-canary:
+	./tests/e2e/canary_smoke_test.sh
+
+canary-healthy:
+	./deploy/local-cluster/canary-scenario.sh healthy
+
+canary-unhealthy:
+	./deploy/local-cluster/canary-scenario.sh unhealthy
 
 tidy:
 	cd $(DEMO_DIR) && go mod tidy

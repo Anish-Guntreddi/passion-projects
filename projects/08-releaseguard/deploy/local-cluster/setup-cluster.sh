@@ -28,6 +28,11 @@ CLUSTER_NAME="releaseguard-local"
 IMAGE_TAG="releaseguard/demo-service:local"
 NAMESPACE="releaseguard"
 DEPLOYMENT="demo-service-stable"
+# Phase 3 (Manual canary): the local overlay now also deploys a canary
+# track (deploy/kubernetes/base/deployment-canary.yaml) from the same
+# image, so it needs the same "pick up the freshly-loaded image" restart
+# and rollout wait as the stable track below.
+CANARY_DEPLOYMENT="demo-service-canary"
 
 log() { echo "[setup-cluster] $*"; }
 
@@ -94,11 +99,18 @@ kubectl apply -k "$PROJECT_ROOT/deploy/kubernetes/overlays/local"
 # harmless no-op layered onto the initial rollout.
 log "restarting deployment/$DEPLOYMENT so it picks up the freshly-loaded image"
 kubectl -n "$NAMESPACE" rollout restart "deployment/$DEPLOYMENT"
+log "restarting deployment/$CANARY_DEPLOYMENT so it picks up the freshly-loaded image"
+kubectl -n "$NAMESPACE" rollout restart "deployment/$CANARY_DEPLOYMENT"
 
 log "waiting for deployment/$DEPLOYMENT rollout"
 kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=120s
+log "waiting for deployment/$CANARY_DEPLOYMENT rollout"
+kubectl -n "$NAMESPACE" rollout status "deployment/$CANARY_DEPLOYMENT" --timeout=120s
 
-log "running smoke test"
+log "running stable smoke test"
 "$PROJECT_ROOT/tests/e2e/smoke_test.sh"
 
-log "done -- stable track is deployed and passed its smoke test"
+log "running canary smoke test"
+"$PROJECT_ROOT/tests/e2e/canary_smoke_test.sh"
+
+log "done -- stable + canary tracks are deployed and passed their smoke tests"

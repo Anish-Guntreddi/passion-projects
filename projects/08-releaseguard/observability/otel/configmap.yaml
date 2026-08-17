@@ -1,0 +1,53 @@
+# OpenTelemetry Collector configuration for ReleaseGuard's local
+# environment (Phase 2: Telemetry).
+#
+# Scope is deliberately narrow -- see ADR 0009
+# (docs/decisions/0009-otel-tracing-prometheus-metrics.md): this Collector
+# handles ONLY trace spans from demo-service. Metrics stay on the separate
+# Prometheus-scrapes-demo-service-directly path (observability/prometheus/)
+# and never pass through this Collector, so there is exactly one place
+# each signal type flows through.
+#
+# The `debug` exporter (verbosity: detailed) prints every received span to
+# the Collector's own stdout. That is genuinely how trace evidence is
+# captured for this MVP -- `kubectl logs deployment/otel-collector -n
+# releaseguard` -- rather than standing up a second visualization backend
+# (Jaeger/Tempo) that spec §1.4 does not ask for and that would add a
+# stateful component to a local kind cluster for no MVP-scale benefit.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch: {}
+
+    exporters:
+      debug:
+        verbosity: detailed
+        sampling_initial: 10
+        sampling_thereafter: 50
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [debug]
+      telemetry:
+        logs:
+          level: info

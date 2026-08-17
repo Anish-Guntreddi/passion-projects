@@ -1,0 +1,17 @@
+# Namespace-scoped Role, not a ClusterRole: Prometheus's kubernetes_sd_configs
+# (see configmap.yaml) is itself scoped to `namespaces: names: [releaseguard]`,
+# so a cluster-wide "list all pods everywhere" grant would be strictly more
+# access than the scrape config ever uses. This is the same least-privilege
+# posture spec §1.6 asks for from the ReleaseGuard controller's own RBAC,
+# applied here a phase early because there is no reason not to.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: prometheus-pod-reader
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/part-of: releaseguard
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
