@@ -15,8 +15,8 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 | 01 ForgeLM | 1 | 4–5 | 0–3 DONE (5e0ef7c, 18090c7: 190 tests, gate-verified) · 4–5 in wave wf_3ede6770 | generation/eval + scaling experiment |
 | 02 KernelForge | 1b | 4–5 | 0–3 DONE (289480c/84a7308, 77ad541/68b54a3: 101 tests, doc numbers recomputed at gate) · 4–5 in wave wf_3ede6770 | GEMM + AI primitives; V0 reduction benchmark backfill first |
 | 03 MiniPaged | 2 | 2–3 | 0–1 DONE (235402e: 123 tests, fresh-clone verified) · 2–3 in wave wf_3ede6770 | paged KV allocator + scheduler |
-| 04 FlashLite | 2 | 2–3 | 0–1 DONE (4d23879/f9a0c36: 115 GPU tests, verified clean rebuild) · 2–3 in impl wf_d54718cc | memory accounting + tiling |
-| 05 ArcServe | 1 | 4–5 | 0–3 DONE (a1baf98, 480bfde: 129 tests × 4 sanitizers) · 4–5 in impl wf_d54718cc | output buffering (decides D3) + worker pool |
+| 04 FlashLite | 2 | 4–5 | 0–3 DONE (…, dd773fa/e5bd626: 161 GPU tests, L2-decay hypothesis confirmed 0.03%) · 4–5 in impl wf_e4ebcd17 | online softmax + fused IO-aware attention |
+| 05 ArcServe | 1 | 6–7 | 0–5 DONE (…, 7d47516: 187 tests × 4 sanitizers, 2 review-caught concurrency bugs fixed) · 6–7 in impl wf_e4ebcd17 | timeouts/backpressure/shutdown + observability |
 | 06 PebbleDB | 2 | 2–3 | 0–1 DONE (9550b96: 74 tests × ASan/UBSan+Release) · 2–3 in wave wf_3ede6770 | MemTable + SSTable |
 | 07 xv6-plus | 1 | 4–5 | 0–3 DONE (b8f916e, c78a9e1: QEMU suite green, zombie-filter fix) · 4–5 in wave wf_3ede6770 | scheduler experiment + VM extension |
 | 08 ReleaseGuard | 1 | 4–5 | 0–3 DONE (c15d36f, 2d6892a: live kind verified, namespace fix) · 4–5 in wave wf_3ede6770 | policy/evaluator core + release state machine |
