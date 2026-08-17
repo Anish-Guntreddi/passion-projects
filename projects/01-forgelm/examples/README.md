@@ -16,8 +16,10 @@ document license") for Phase 0/1 development and tests: it is small enough
 to commit directly (~150 KB) and train a tokenizer / build a dataset on
 without any network access at test time, which keeps CI fully offline and
 deterministic. See `docs/decisions/0003-dataset-choice.md` for the full
-rationale and the plan for a larger corpus (e.g. TinyStories) once Phase 5
-scaling experiments need more tokens.
+rationale — including that ADR's "Phase 5 resolution" section: this same
+corpus (84,583 tokens once tokenized) turned out sufficient for the Phase
+5 scaling experiment's toy-to-small compute budget too, so no larger
+corpus was ever downloaded.
 
 `../tests/fixtures/` and `../tests/conftest.py` additionally define a tiny
 synthetic string corpus for sub-second unit tests that don't need real

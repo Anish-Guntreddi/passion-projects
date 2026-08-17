@@ -1,7 +1,23 @@
-"""Throughput/memory benchmark harness -- kept separate from model-correctness code.
+"""Throughput/memory/val-loss benchmark harness (Phase 5) -- kept separate
+from model-correctness code (spec §1.7).
 
-Not yet implemented -- this is Phase 5 of the roadmap (see
-``01-forgelm-spec.md`` Part 3). No benchmark numbers exist in this repo
-until real measured runs land here with hardware/version/seed records
-committed alongside them (portfolio-wide rule: never fabricate results).
+``run_benchmark`` reuses ``forgelm.training.loop.Trainer`` to execute real
+optimizer steps and measures them; nothing in this package asserts
+anything about the *correctness* of the model's outputs (that lives under
+``tests/unit/test_model_*.py`` / ``tests/integration/test_model_overfit.py``).
+No benchmark number is fabricated -- every figure that ends up in
+``benchmarks/results/`` or ``benchmarks/methodology.md`` is measured
+output from a real run, committed as a raw JSON artifact alongside the
+hardware/software/config record :func:`forgelm.benchmarks.hardware.hardware_info`
+/ :func:`~forgelm.benchmarks.hardware.software_info` capture.
 """
+
+from forgelm.benchmarks.hardware import hardware_info, software_info
+from forgelm.benchmarks.harness import BenchmarkResult, run_benchmark
+
+__all__ = [
+    "BenchmarkResult",
+    "hardware_info",
+    "run_benchmark",
+    "software_info",
+]

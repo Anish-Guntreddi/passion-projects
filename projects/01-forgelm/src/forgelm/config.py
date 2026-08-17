@@ -415,3 +415,167 @@ class TrainConfig:
                 "TrainConfig.checkpoint_interval must be non-negative, got "
                 f"{self.checkpoint_interval}"
             )
+
+
+# --------------------------------------------------------------------------
+# Phase 4: generation + evaluation configs
+# --------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class GenerationSettings:
+    """Decoding settings for :func:`forgelm.generation.sampling.generate` (FR8).
+
+    ``do_sample=False`` is greedy decoding: every step takes the argmax
+    token and ``temperature``/``top_k``/``top_p`` are ignored entirely
+    (documented here, not silently -- see
+    ``forgelm.generation.sampling.generate``). ``do_sample=True`` samples
+    from the (temperature-scaled, then optionally top-k/top-p filtered)
+    softmax distribution using a seeded generator, so a report produced
+    with these settings is reproducible from the recorded config alone.
+    """
+
+    max_new_tokens: int = 50
+    temperature: float = 1.0
+    top_k: int | None = None
+    top_p: float | None = None
+    do_sample: bool = True
+    seed: int = 1337
+
+    def __post_init__(self) -> None:
+        if self.max_new_tokens <= 0:
+            raise ConfigError(
+                f"GenerationSettings.max_new_tokens must be positive, got {self.max_new_tokens}"
+            )
+        if self.temperature <= 0:
+            raise ConfigError(
+                f"GenerationSettings.temperature must be positive, got {self.temperature}"
+            )
+        if self.top_k is not None and self.top_k <= 0:
+            raise ConfigError(f"GenerationSettings.top_k must be positive, got {self.top_k}")
+        if self.top_p is not None and not (0.0 < self.top_p <= 1.0):
+            raise ConfigError(f"GenerationSettings.top_p must be in (0, 1], got {self.top_p}")
+
+
+@dataclasses.dataclass(frozen=True)
+class GenerateConfig:
+    """Top-level config for ``forgelm generate`` (FR8): load a checkpoint +
+    tokenizer, generate a continuation for one prompt."""
+
+    checkpoint_path: Path
+    tokenizer_path: Path
+    prompt: str = ""
+    device: str = "cpu"
+    generation: GenerationSettings = dataclasses.field(default_factory=GenerationSettings)
+
+    def __post_init__(self) -> None:
+        if self.device not in ("cpu", "cuda"):
+            raise ConfigError(f"GenerateConfig.device must be 'cpu' or 'cuda', got {self.device!r}")
+
+
+@dataclasses.dataclass(frozen=True)
+class EvaluateConfig:
+    """Top-level config for ``forgelm evaluate`` (FR9): loss/perplexity of a
+    checkpoint against a pre-built token array, with a configurable token
+    budget (``max_tokens``, ``None`` = the whole array)."""
+
+    checkpoint_path: Path
+    tokens_path: Path
+    batch_size: int = 8
+    max_tokens: int | None = None
+    device: str = "cpu"
+
+    def __post_init__(self) -> None:
+        if self.batch_size <= 0:
+            raise ConfigError(f"EvaluateConfig.batch_size must be positive, got {self.batch_size}")
+        if self.max_tokens is not None and self.max_tokens <= 0:
+            raise ConfigError(
+                f"EvaluateConfig.max_tokens must be positive when set, got {self.max_tokens}"
+            )
+        if self.device not in ("cpu", "cuda"):
+            raise ConfigError(f"EvaluateConfig.device must be 'cpu' or 'cuda', got {self.device!r}")
+
+
+@dataclasses.dataclass(frozen=True)
+class SampleReportConfig:
+    """Top-level config for ``forgelm sample-report`` (FR9's "sample-report
+    format" deliverable): one checkpoint evaluated against a val token
+    array, plus generations for each of ``prompts`` under one documented
+    :class:`GenerationSettings`, written as a single JSON + Markdown report.
+    """
+
+    checkpoint_path: Path
+    tokenizer_path: Path
+    output_path: Path
+    val_tokens_path: Path | None = None
+    prompts: list[str] = dataclasses.field(default_factory=lambda: [""])
+    generation: GenerationSettings = dataclasses.field(default_factory=GenerationSettings)
+    eval_batch_size: int = 8
+    eval_max_tokens: int | None = None
+    device: str = "cpu"
+
+    def __post_init__(self) -> None:
+        if not self.prompts:
+            raise ConfigError("SampleReportConfig.prompts must contain at least one prompt")
+        if self.eval_batch_size <= 0:
+            raise ConfigError(
+                f"SampleReportConfig.eval_batch_size must be positive, got {self.eval_batch_size}"
+            )
+        if self.eval_max_tokens is not None and self.eval_max_tokens <= 0:
+            raise ConfigError(
+                "SampleReportConfig.eval_max_tokens must be positive when set, got "
+                f"{self.eval_max_tokens}"
+            )
+        if self.device not in ("cpu", "cuda"):
+            raise ConfigError(
+                f"SampleReportConfig.device must be 'cpu' or 'cuda', got {self.device!r}"
+            )
+
+
+# --------------------------------------------------------------------------
+# Phase 5: benchmark harness config
+# --------------------------------------------------------------------------
+
+
+@dataclasses.dataclass(frozen=True)
+class BenchmarkRunConfig:
+    """Top-level config for ``forgelm benchmark run`` (FR10): one throughput
+    / memory / val-loss measurement of a single model+training config
+    against pre-built token arrays.
+
+    ``bench_warmup_steps`` are run and timed-out-of-band before
+    measurement starts (CUDA kernel selection / cuDNN autotune / optional
+    ``torch.compile`` tracing all happen here, not during the measured
+    window) -- distinct from ``training.warmup_steps``, which is the LR
+    schedule's own warmup and affects the *loss*, not the *timing*
+    methodology.
+    """
+
+    name: str
+    model: ModelConfig
+    training: TrainingConfig
+    train_tokens_path: Path
+    val_tokens_path: Path
+    bench_warmup_steps: int = 10
+    measured_steps: int = 50
+    eval_interval: int | None = None
+    torch_compile: bool = False
+    output_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ConfigError("BenchmarkRunConfig.name must be non-empty")
+        if self.bench_warmup_steps < 0:
+            raise ConfigError(
+                "BenchmarkRunConfig.bench_warmup_steps must be non-negative, got "
+                f"{self.bench_warmup_steps}"
+            )
+        if self.measured_steps <= 0:
+            raise ConfigError(
+                f"BenchmarkRunConfig.measured_steps must be positive, got {self.measured_steps}"
+            )
+        if self.eval_interval is not None and self.eval_interval <= 0:
+            raise ConfigError(
+                "BenchmarkRunConfig.eval_interval must be positive when set, got "
+                f"{self.eval_interval}"
+            )

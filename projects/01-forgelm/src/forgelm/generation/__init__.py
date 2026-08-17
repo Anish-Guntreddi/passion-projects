@@ -1,5 +1,9 @@
-"""Sampling from a trained checkpoint: greedy, temperature, top-k, top-p.
+from forgelm.generation.checkpoint_loader import LoadedCheckpoint, load_model_from_checkpoint
+from forgelm.generation.sampling import generate, sample_next_token
 
-Not yet implemented -- this is Phase 4 of the roadmap (see
-``01-forgelm-spec.md`` Part 3).
-"""
+__all__ = [
+    "LoadedCheckpoint",
+    "generate",
+    "load_model_from_checkpoint",
+    "sample_next_token",
+]

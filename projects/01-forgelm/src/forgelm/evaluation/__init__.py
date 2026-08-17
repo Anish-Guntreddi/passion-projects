@@ -1,5 +1,11 @@
-"""Validation loss / perplexity / sample-report evaluation.
+from forgelm.evaluation.perplexity import EvalResult, evaluate_loss
+from forgelm.evaluation.report import GenerationSample, SampleReport, render_markdown, save_report
 
-Not yet implemented -- this is Phase 4 of the roadmap (see
-``01-forgelm-spec.md`` Part 3).
-"""
+__all__ = [
+    "EvalResult",
+    "GenerationSample",
+    "SampleReport",
+    "evaluate_loss",
+    "render_markdown",
+    "save_report",
+]

@@ -50,10 +50,10 @@ Full pinned dependency list: `requirements-lock.txt` (committed).
 - Requests `torch.use_deterministic_algorithms(True, warn_only=True)` and
   disables cuDNN benchmarking/enables cuDNN deterministic mode.
 
-Every CLI command that needs reproducibility (currently: `forgelm smoke`)
-calls `set_seed()` before doing anything else. Training (Phase 3) will call
-it once at the start of a run and additionally persist the RNG state in
-checkpoints (D7, not yet implemented).
+Every CLI command that needs reproducibility calls `set_seed()` before
+doing anything else. Training calls it once at the start of a run and
+additionally persists the full RNG state in checkpoints (D7, ADR 0009 —
+verified by `tests/integration/test_checkpoint_resume.py`).
 
 ## Determinism guarantees at this phase
 
@@ -88,7 +88,37 @@ Numerical comparisons in tests use a tolerance, never exact float equality
 for a fixed op sequence, so the same test code stays correct once GPU
 non-associative-reduction paths are exercised.
 
-## How to reproduce the test run reported for Phases 0–1
+## Determinism guarantees added in Phases 2–5
+
+- **Training** (`forgelm.training.loop.Trainer`): `iter_batches(dataset,
+  batch_size, seed)` is a pure function of its three arguments (see its
+  docstring), so a training run's entire batch stream is reproducible
+  from `(dataset, batch_size, seed)` alone. Combined with the checkpoint's
+  full RNG-state capture (`forgelm.training.checkpoint`), an interrupted
+  and resumed run reproduces the uninterrupted run's per-step losses
+  within tolerance — verified by
+  `tests/integration/test_checkpoint_resume.py`.
+- **Generation** (`forgelm.generation.sampling.generate`): greedy decoding
+  (`do_sample=False`) is exactly deterministic (pure argmax, no RNG
+  involved at all). Sampling mode uses a dedicated `torch.Generator`
+  seeded from `GenerationSettings.seed`, independent of the global RNG
+  stream any other code in the process may have already consumed — the
+  same `(prompt, GenerationSettings)` always reproduces the same
+  continuation, verified by
+  `tests/unit/test_generation_sampling.py::test_generate_sampling_is_reproducible_given_the_same_seed`.
+- **Evaluation** (`forgelm.evaluation.perplexity.evaluate_loss`): walks
+  the dataset with `shuffle=False`, so evaluation order needs no seed at
+  all and is trivially reproducible.
+- **Benchmarks** (`forgelm.benchmarks.harness.run_benchmark`): seeds
+  before constructing the model/optimizer, so `final_train_loss`/
+  `val_loss` are reproducible given the same config
+  (`tests/unit/test_benchmark_harness.py::test_run_benchmark_is_reproducible_given_the_same_seed`)
+  — timing fields (`tokens_per_sec`, `step_time_ms_*`) are explicitly
+  *not* claimed reproducible to the same tolerance, since wall-clock
+  timing is inherently sensitive to system load; see
+  `benchmarks/methodology.md`.
+
+## How to reproduce the full Phase 0–5 test run
 
 ```bash
 cd projects/01-forgelm
@@ -102,38 +132,52 @@ The exact command used to produce the results recorded in this project's
 final phase report is:
 
 ```bash
-wsl -d Ubuntu -- bash -lc 'cd /mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm && source .venv/bin/activate && pytest -v'
+wsl -d Ubuntu -- bash -lc 'cd /mnt/c/Users/guntr/Documents/passion-projects/projects/01-forgelm && source .venv/bin/activate && pytest -q'
 ```
 
 Last real result (2026-08-17, environment above, GPU tests included since
-an RTX 4090 was visible):
+an RTX 4090 was visible; covers Phases 0–5 in full, including the new
+generation/evaluation/benchmark-harness unit + integration tests and the
+Phase 4 CLI (`generate`/`evaluate`/`sample-report`) and Phase 5 CLI
+(`benchmark run`) subprocess tests, plus regression tests added for a
+post-implementation review round -- exact top-k tie handling
+(`test_top_k_filter_keeps_exactly_k_even_with_a_tie_at_the_cutoff`), the
+`evaluate_loss` token-budget overshoot fix
+(`test_evaluate_loss_never_overshoots_a_budget_that_is_not_batch_aligned`),
+and `BenchmarkResult` dataset-identity fields
+(`test_run_benchmark_records_dataset_identity`)):
 
 ```
-91 passed, 2 warnings in 132.04s (0:02:12)
+263 passed, 10 warnings in 1899.91s (0:31:39)
 ```
 
-The 2 warnings are both the expected `torch` notice that CuBLAS matmul
+(Wall-clock is notably longer than the original 788.66s/13:08 run above --
+this run shared the GPU/WSL VM with several other portfolio projects'
+agents concurrently, not a regression in the suite itself; see
+`benchmarks/methodology.md`'s note on timing fields never being claimed
+reproducible to a tight tolerance under shared-machine load.)
+
+All 10 warnings are the same expected `torch` notice that CuBLAS matmul
 doesn't have a fully deterministic kernel without setting
-`CUBLAS_WORKSPACE_CONFIG` (triggered by the GPU smoke tests) -- exactly why
-`test_smoke_gpu.py` compares checksums with a tolerance instead of exact
-equality rather than treating it as a bug to silence.
+`CUBLAS_WORKSPACE_CONFIG` (triggered by the GPU-exercising tests and the
+`torch.compile` A/B unit test) -- exactly why `test_smoke_gpu.py` compares
+checksums with a tolerance instead of exact equality rather than treating
+it as a bug to silence.
 
 `ruff check`, `ruff format --check`, and `pyright` all report clean (0
-errors) on this same commit of the source.
+errors/warnings) on this same commit of the source.
 
-Also verified with CUDA hidden (`CUDA_VISIBLE_DEVICES="" pytest -v`), to
+Historical reference: Phase 0/1's original (smaller) suite was also
+verified with CUDA hidden (`CUDA_VISIBLE_DEVICES="" pytest -v`), to
 confirm the D3 "CPU path must work for tests" guarantee independently of
 this machine's GPU and to mirror what the GitHub Actions runner (no GPU)
-will see:
+will see -- `89 passed, 2 skipped` (the 2 skips being `test_smoke_gpu.py`'s
+`requires_cuda`-marked tests). The CPU-only path continues to be the
+concrete, always-enforced guarantee via `.github/workflows/ci-forgelm.yml`
+(a CPU-only GitHub Actions runner) on every push/PR, rather than a number
+re-verified locally on every phase.
 
-```
-89 passed, 2 skipped in 113.88s (0:01:53)
-```
-
-(the 2 skips are exactly `test_smoke_gpu.py`'s two `requires_cuda`-marked
-tests, skipped cleanly rather than failing.)
-
-## Reproducibility risks (Phase 0/1 scope) and mitigations
+## Reproducibility risks and mitigations
 
 - **Unpinned versions** → `requirements-lock.txt` is committed and is what
   `scripts/setup_env.sh` installs from by default (`pip install -r`, not a

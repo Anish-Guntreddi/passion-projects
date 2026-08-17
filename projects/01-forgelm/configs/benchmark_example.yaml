@@ -1,0 +1,45 @@
+# Example config for `forgelm benchmark run --config configs/benchmark_example.yaml`
+# (Phase 5). Fields map 1:1 to forgelm.config.BenchmarkRunConfig.
+#
+# This is the config-driven single-run entry point FR1 asks for (one
+# measurement, fully reproducible from this file alone). The actual
+# Phase 5 scaling-experiment sweep (3 model sizes + context-length sweep +
+# batch-size sweep + optional torch.compile A/B) is driven by
+# scripts/run_phase5_benchmarks.py instead of ten near-duplicate YAML
+# files -- see docs/decisions/0010-phase5-compute-budget.md.
+#
+# Run these first to produce the token arrays this config points at:
+#   forgelm tokenizer train --config configs/tokenizer_train.yaml
+#   forgelm dataset build --config configs/dataset_build.yaml
+name: small-example
+model:
+  vocab_size: 512
+  context_length: 128
+  d_model: 64
+  n_layers: 2
+  n_heads: 4
+  d_ff: 256
+  dropout: 0.0
+  tie_weights: true
+  dtype: float32
+training:
+  seed: 1337
+  micro_batch_size: 16
+  grad_accum_steps: 1
+  max_steps: 310
+  warmup_steps: 20
+  lr: 0.0003
+  min_lr_ratio: 0.1
+  weight_decay: 0.1
+  grad_clip_norm: 1.0
+  eval_interval: 310
+  eval_batches: 5
+  device: cuda
+  precision: auto
+train_tokens_path: artifacts/dataset/train_tokens.npy
+val_tokens_path: artifacts/dataset/val_tokens.npy
+bench_warmup_steps: 10
+measured_steps: 300
+eval_interval: 30
+torch_compile: false
+output_path: benchmarks/results/small-example.json

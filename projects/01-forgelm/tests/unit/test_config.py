@@ -7,10 +7,17 @@ import pytest
 import yaml
 
 from forgelm.config import (
+    BenchmarkRunConfig,
     ConfigError,
     DatasetBuildConfig,
+    EvaluateConfig,
+    GenerateConfig,
+    GenerationSettings,
+    ModelConfig,
+    SampleReportConfig,
     SmokeConfig,
     TokenizerTrainConfig,
+    TrainingConfig,
     config_from_dict,
     load_config,
 )
@@ -210,3 +217,132 @@ def test_dataset_build_config_rejects_out_of_range_val_fraction(val_fraction: fl
             tokenizer_path=Path("t.json"),
             val_fraction=val_fraction,
         )
+
+
+# -- Phase 4: generation / evaluation configs ----------------------------------
+
+
+def test_generation_settings_defaults() -> None:
+    settings = GenerationSettings()
+    assert settings.max_new_tokens == 50
+    assert settings.do_sample is True
+    assert settings.top_k is None
+    assert settings.top_p is None
+
+
+@pytest.mark.parametrize("max_new_tokens", [0, -1])
+def test_generation_settings_rejects_non_positive_max_new_tokens(max_new_tokens: int) -> None:
+    with pytest.raises(ConfigError, match="max_new_tokens"):
+        GenerationSettings(max_new_tokens=max_new_tokens)
+
+
+@pytest.mark.parametrize("temperature", [0.0, -1.0])
+def test_generation_settings_rejects_non_positive_temperature(temperature: float) -> None:
+    with pytest.raises(ConfigError, match="temperature"):
+        GenerationSettings(temperature=temperature)
+
+
+def test_generation_settings_rejects_non_positive_top_k() -> None:
+    with pytest.raises(ConfigError, match="top_k"):
+        GenerationSettings(top_k=0)
+
+
+@pytest.mark.parametrize("top_p", [0.0, 1.5, -0.1])
+def test_generation_settings_rejects_out_of_range_top_p(top_p: float) -> None:
+    with pytest.raises(ConfigError, match="top_p"):
+        GenerationSettings(top_p=top_p)
+
+
+def test_generate_config_rejects_bad_device() -> None:
+    with pytest.raises(ConfigError, match="device"):
+        GenerateConfig(
+            checkpoint_path=Path("ckpt.pt"), tokenizer_path=Path("tok.json"), device="tpu"
+        )
+
+
+def test_generate_config_nested_generation_settings_loads_from_yaml(tmp_path: Path) -> None:
+    config_path = tmp_path / "generate.yaml"
+    config_path.write_text(
+        "checkpoint_path: ckpt.pt\n"
+        "tokenizer_path: tok.json\n"
+        "prompt: hello\n"
+        "generation:\n"
+        "  max_new_tokens: 10\n"
+        "  do_sample: false\n"
+    )
+    cfg = load_config(config_path, GenerateConfig)
+    assert cfg.generation.max_new_tokens == 10
+    assert cfg.generation.do_sample is False
+    # Untouched nested fields keep GenerationSettings's own defaults.
+    assert cfg.generation.temperature == 1.0
+
+
+def test_evaluate_config_rejects_non_positive_batch_size() -> None:
+    with pytest.raises(ConfigError, match="batch_size"):
+        EvaluateConfig(checkpoint_path=Path("ckpt.pt"), tokens_path=Path("t.npy"), batch_size=0)
+
+
+def test_evaluate_config_max_tokens_defaults_to_none() -> None:
+    cfg = EvaluateConfig(checkpoint_path=Path("ckpt.pt"), tokens_path=Path("t.npy"))
+    assert cfg.max_tokens is None
+
+
+def test_sample_report_config_rejects_empty_prompts() -> None:
+    with pytest.raises(ConfigError, match="prompts"):
+        SampleReportConfig(
+            checkpoint_path=Path("ckpt.pt"),
+            tokenizer_path=Path("tok.json"),
+            output_path=Path("report"),
+            prompts=[],
+        )
+
+
+# -- Phase 5: benchmark harness config -------------------------------------------
+
+
+def _tiny_model_config() -> ModelConfig:
+    return ModelConfig(vocab_size=32, context_length=8, d_model=16, n_layers=1, n_heads=2, d_ff=32)
+
+
+def test_benchmark_run_config_rejects_blank_name() -> None:
+    with pytest.raises(ConfigError, match="name"):
+        BenchmarkRunConfig(
+            name="  ",
+            model=_tiny_model_config(),
+            training=TrainingConfig(),
+            train_tokens_path=Path("train.npy"),
+            val_tokens_path=Path("val.npy"),
+        )
+
+
+def test_benchmark_run_config_rejects_non_positive_measured_steps() -> None:
+    with pytest.raises(ConfigError, match="measured_steps"):
+        BenchmarkRunConfig(
+            name="run",
+            model=_tiny_model_config(),
+            training=TrainingConfig(),
+            train_tokens_path=Path("train.npy"),
+            val_tokens_path=Path("val.npy"),
+            measured_steps=0,
+        )
+
+
+def test_benchmark_run_config_loads_nested_model_and_training_from_yaml(tmp_path: Path) -> None:
+    config_path = tmp_path / "bench.yaml"
+    config_path.write_text(
+        "name: small\n"
+        "model:\n"
+        "  vocab_size: 64\n"
+        "  d_model: 16\n"
+        "  n_heads: 2\n"
+        "training:\n"
+        "  micro_batch_size: 4\n"
+        "train_tokens_path: train.npy\n"
+        "val_tokens_path: val.npy\n"
+        "measured_steps: 5\n"
+    )
+    cfg = load_config(config_path, BenchmarkRunConfig)
+    assert cfg.name == "small"
+    assert cfg.model.vocab_size == 64
+    assert cfg.training.micro_batch_size == 4
+    assert cfg.measured_steps == 5

@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
 import typer
 
+from forgelm.cli.benchmark_cli import run_benchmark_cli
 from forgelm.cli.dataset_cli import build_dataset_artifacts
+from forgelm.cli.evaluation_cli import build_sample_report, evaluate_checkpoint
+from forgelm.cli.generation_cli import generate_text
 from forgelm.cli.smoke import run_smoke
 from forgelm.cli.tokenizer_cli import decode_ids, encode_text, train_tokenizer
 from forgelm.cli.train_cli import run_training
 from forgelm.config import (
+    BenchmarkRunConfig,
     DatasetBuildConfig,
+    EvaluateConfig,
+    GenerateConfig,
+    GenerationSettings,
+    SampleReportConfig,
     SmokeConfig,
     TokenizerTrainConfig,
     TrainConfig,
@@ -22,8 +31,10 @@ from forgelm.config import (
 app = typer.Typer(help="ForgeLM: a from-scratch decoder-only Transformer training stack.")
 tokenizer_app = typer.Typer(help="Train/encode/decode with the byte-level BPE tokenizer.")
 dataset_app = typer.Typer(help="Build token arrays + statistics from raw text.")
+benchmark_app = typer.Typer(help="Throughput/memory/val-loss measurement runs (Phase 5).")
 app.add_typer(tokenizer_app, name="tokenizer")
 app.add_typer(dataset_app, name="dataset")
+app.add_typer(benchmark_app, name="benchmark")
 
 _CONFIG_HELP = "YAML config file (see configs/). Overrides the individual flags below."
 
@@ -161,6 +172,141 @@ def train(
         result = run_training(config, output_dir)
     except ValueError as exc:
         raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+
+
+@app.command()
+def generate(
+    checkpoint_path: Path | None = typer.Option(
+        None, "--checkpoint", exists=True, dir_okay=False, help="Trained checkpoint (.pt)."
+    ),
+    tokenizer_path: Path | None = typer.Option(
+        None, "--tokenizer", exists=True, dir_okay=False, help="Trained tokenizer (.json)."
+    ),
+    prompt: str = typer.Option("", "--prompt", help="Prompt text to continue."),
+    device: str = typer.Option("cpu", "--device", help="'cpu' or 'cuda'."),
+    max_new_tokens: int = typer.Option(50, "--max-new-tokens"),
+    temperature: float = typer.Option(1.0, "--temperature"),
+    top_k: int = typer.Option(0, "--top-k", help="0 = disabled."),
+    top_p: float = typer.Option(0.0, "--top-p", help="0 = disabled."),
+    do_sample: bool = typer.Option(
+        True, "--sample/--greedy", help="Sample vs. greedy argmax decoding."
+    ),
+    seed: int = typer.Option(1337, "--seed"),
+    config_path: Path | None = typer.Option(
+        None, "--config", exists=True, dir_okay=False, help=_CONFIG_HELP
+    ),
+) -> None:
+    """Generate a continuation for a prompt from a trained checkpoint (FR8)."""
+    if config_path is not None:
+        config = load_config(config_path, GenerateConfig)
+    else:
+        if checkpoint_path is None or tokenizer_path is None:
+            raise typer.BadParameter(
+                "either --config or both --checkpoint and --tokenizer are required"
+            )
+        config = GenerateConfig(
+            checkpoint_path=checkpoint_path,
+            tokenizer_path=tokenizer_path,
+            prompt=prompt,
+            device=device,
+            generation=GenerationSettings(
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_k=top_k or None,
+                top_p=top_p or None,
+                do_sample=do_sample,
+                seed=seed,
+            ),
+        )
+    try:
+        result = generate_text(config)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+
+
+@app.command()
+def evaluate(
+    checkpoint_path: Path | None = typer.Option(
+        None, "--checkpoint", exists=True, dir_okay=False, help="Trained checkpoint (.pt)."
+    ),
+    tokens_path: Path | None = typer.Option(
+        None, "--tokens", exists=True, dir_okay=False, help="Token array (.npy) to evaluate on."
+    ),
+    batch_size: int = typer.Option(8, "--batch-size"),
+    max_tokens: int = typer.Option(0, "--max-tokens", help="Token budget; 0 = the whole array."),
+    device: str = typer.Option("cpu", "--device", help="'cpu' or 'cuda'."),
+    config_path: Path | None = typer.Option(
+        None, "--config", exists=True, dir_okay=False, help=_CONFIG_HELP
+    ),
+) -> None:
+    """Loss/perplexity of a trained checkpoint on a token array (FR9)."""
+    if config_path is not None:
+        config = load_config(config_path, EvaluateConfig)
+    else:
+        if checkpoint_path is None or tokens_path is None:
+            raise typer.BadParameter(
+                "either --config or both --checkpoint and --tokens are required"
+            )
+        config = EvaluateConfig(
+            checkpoint_path=checkpoint_path,
+            tokens_path=tokens_path,
+            batch_size=batch_size,
+            max_tokens=max_tokens or None,
+            device=device,
+        )
+    try:
+        result = evaluate_checkpoint(config)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+
+
+@app.command("sample-report")
+def sample_report(
+    config_path: Path = typer.Option(
+        ...,
+        "--config",
+        exists=True,
+        dir_okay=False,
+        help="YAML config mapping to forgelm.config.SampleReportConfig (required -- prompts "
+        "and decoding settings are not exposed as individual flags).",
+    ),
+    output_path: Path | None = typer.Option(
+        None, "--output", help="Overrides the config file's 'output_path' when given."
+    ),
+) -> None:
+    """Evaluate + generate documented samples from a checkpoint, written as
+    JSON + Markdown (FR9's sample-report format deliverable)."""
+    config = load_config(config_path, SampleReportConfig)
+    if output_path is not None:
+        config = dataclasses.replace(config, output_path=output_path)
+    try:
+        result = build_sample_report(config)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    typer.echo(json.dumps(result, indent=2, sort_keys=True))
+
+
+@benchmark_app.command("run")
+def benchmark_run(
+    config_path: Path = typer.Option(
+        ...,
+        "--config",
+        exists=True,
+        dir_okay=False,
+        help="YAML config mapping to forgelm.config.BenchmarkRunConfig.",
+    ),
+    output_path: Path | None = typer.Option(
+        None,
+        "--output",
+        help="Where to write the result JSON. Overrides the config's 'output_path'.",
+    ),
+) -> None:
+    """Run one throughput/memory/val-loss benchmark measurement (FR10)."""
+    config = load_config(config_path, BenchmarkRunConfig)
+    result = run_benchmark_cli(config, output_path)
     typer.echo(json.dumps(result, indent=2, sort_keys=True))
 
 

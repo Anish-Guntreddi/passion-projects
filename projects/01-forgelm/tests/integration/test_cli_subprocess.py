@@ -381,3 +381,258 @@ def test_cli_train_without_config_or_output_reports_clean_error(tmp_path: Path) 
     proc = _run("train", "--config", str(config_path))
     assert proc.returncode != 0
     assert "output" in proc.stderr.lower()
+
+
+# -- Phase 4: `forgelm generate` / `forgelm evaluate` / `forgelm sample-report` ----
+
+
+def _build_tokenizer_dataset_and_checkpoint(tmp_path: Path) -> dict[str, Path]:
+    """Shared fixture-equivalent for the Phase 4 CLI tests below: a real
+    tokenizer, a real built dataset, and a real trained checkpoint, all
+    produced via actual `forgelm` subprocess invocations (not shortcuts),
+    matching this file's existing "exercise the real CLI" convention."""
+    corpus_path = tmp_path / "corpus.txt"
+    corpus_path.write_text("once upon a time there was a small fox. " * 60, encoding="utf-8")
+    tok_path = tmp_path / "tok.json"
+    assert (
+        _run(
+            "tokenizer",
+            "train",
+            "--input",
+            str(corpus_path),
+            "--output",
+            str(tok_path),
+            "--vocab-size",
+            "280",
+        ).returncode
+        == 0
+    )
+
+    dataset_dir = tmp_path / "dataset"
+    assert (
+        _run(
+            "dataset",
+            "build",
+            "--input",
+            str(corpus_path),
+            "--tokenizer",
+            str(tok_path),
+            "--output",
+            str(dataset_dir),
+            "--context-length",
+            "16",
+            "--val-fraction",
+            "0.2",
+        ).returncode
+        == 0
+    )
+
+    ckpt_dir = tmp_path / "checkpoints"
+    train_config_path = tmp_path / "train.yaml"
+    train_config_path.write_text(
+        _train_config_yaml(
+            train_tokens_path=dataset_dir / "train_tokens.npy",
+            val_tokens_path=dataset_dir / "val_tokens.npy",
+            output_dir=ckpt_dir,
+        )
+    )
+    train_proc = _run("train", "--config", str(train_config_path))
+    assert train_proc.returncode == 0, train_proc.stderr
+
+    return {
+        "tokenizer_path": tok_path,
+        "train_tokens_path": dataset_dir / "train_tokens.npy",
+        "val_tokens_path": dataset_dir / "val_tokens.npy",
+        "checkpoint_path": ckpt_dir / "final.pt",
+    }
+
+
+def test_cli_generate_produces_text_continuing_the_prompt(tmp_path: Path) -> None:
+    artifacts = _build_tokenizer_dataset_and_checkpoint(tmp_path)
+    proc = _run(
+        "generate",
+        "--checkpoint",
+        str(artifacts["checkpoint_path"]),
+        "--tokenizer",
+        str(artifacts["tokenizer_path"]),
+        "--prompt",
+        "once upon a time",
+        "--max-new-tokens",
+        "10",
+        "--greedy",
+    )
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["prompt"] == "once upon a time"
+    assert isinstance(result["generated_text"], str) and result["generated_text"]
+    assert result["generated_text"].startswith("once upon a time")
+
+
+def test_cli_generate_is_deterministic_with_greedy_decoding(tmp_path: Path) -> None:
+    artifacts = _build_tokenizer_dataset_and_checkpoint(tmp_path)
+    args = [
+        "generate",
+        "--checkpoint",
+        str(artifacts["checkpoint_path"]),
+        "--tokenizer",
+        str(artifacts["tokenizer_path"]),
+        "--prompt",
+        "the fox",
+        "--max-new-tokens",
+        "8",
+        "--greedy",
+    ]
+    result_a = json.loads(_run(*args).stdout)
+    result_b = json.loads(_run(*args).stdout)
+    assert result_a["generated_text"] == result_b["generated_text"]
+
+
+def test_cli_evaluate_reports_loss_and_perplexity(tmp_path: Path) -> None:
+    artifacts = _build_tokenizer_dataset_and_checkpoint(tmp_path)
+    proc = _run(
+        "evaluate",
+        "--checkpoint",
+        str(artifacts["checkpoint_path"]),
+        "--tokens",
+        str(artifacts["val_tokens_path"]),
+        "--batch-size",
+        "2",
+    )
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["loss"] > 0
+    assert result["perplexity"] > 1.0
+    assert result["tokens_evaluated"] > 0
+
+
+def test_cli_evaluate_respects_max_tokens_budget(tmp_path: Path) -> None:
+    artifacts = _build_tokenizer_dataset_and_checkpoint(tmp_path)
+    proc = _run(
+        "evaluate",
+        "--checkpoint",
+        str(artifacts["checkpoint_path"]),
+        "--tokens",
+        str(artifacts["val_tokens_path"]),
+        "--batch-size",
+        "2",
+        "--max-tokens",
+        "32",  # 2 * context_length(16) = one batch
+    )
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["tokens_evaluated"] == 32
+    assert result["num_batches"] == 1
+
+
+def test_cli_sample_report_writes_json_and_markdown(tmp_path: Path) -> None:
+    artifacts = _build_tokenizer_dataset_and_checkpoint(tmp_path)
+    output_base = tmp_path / "report"
+    config_path = tmp_path / "sample_report.yaml"
+    config_path.write_text(
+        f"checkpoint_path: {artifacts['checkpoint_path']}\n"
+        f"tokenizer_path: {artifacts['tokenizer_path']}\n"
+        f"output_path: {output_base}\n"
+        f"val_tokens_path: {artifacts['val_tokens_path']}\n"
+        "prompts:\n"
+        '  - "once upon a time"\n'
+        '  - "the fox"\n'
+        "generation:\n"
+        "  max_new_tokens: 8\n"
+        "  do_sample: false\n"
+        "eval_batch_size: 2\n"
+    )
+    proc = _run("sample-report", "--config", str(config_path))
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["num_samples"] == 2
+    assert result["eval_result"]["loss"] > 0
+
+    json_path = output_base.with_suffix(".json")
+    md_path = output_base.with_suffix(".md")
+    assert json_path.exists()
+    assert md_path.exists()
+    report_payload = json.loads(json_path.read_text(encoding="utf-8"))
+    assert len(report_payload["samples"]) == 2
+    assert "## Generations" in md_path.read_text(encoding="utf-8")
+
+
+def test_cli_generate_without_config_or_flags_reports_clean_error(tmp_path: Path) -> None:
+    proc = _run("generate", "--prompt", "hi")
+    assert proc.returncode != 0
+    assert "checkpoint" in proc.stderr.lower() or "tokenizer" in proc.stderr.lower()
+
+
+# -- Phase 5: `forgelm benchmark run` -----------------------------------------------
+
+
+def test_cli_benchmark_run_writes_a_result_json(tmp_path: Path) -> None:
+    corpus_path = tmp_path / "corpus.txt"
+    corpus_path.write_text("once upon a time there was a small fox. " * 60, encoding="utf-8")
+    tok_path = tmp_path / "tok.json"
+    assert (
+        _run(
+            "tokenizer",
+            "train",
+            "--input",
+            str(corpus_path),
+            "--output",
+            str(tok_path),
+            "--vocab-size",
+            "280",
+        ).returncode
+        == 0
+    )
+    dataset_dir = tmp_path / "dataset"
+    assert (
+        _run(
+            "dataset",
+            "build",
+            "--input",
+            str(corpus_path),
+            "--tokenizer",
+            str(tok_path),
+            "--output",
+            str(dataset_dir),
+            "--context-length",
+            "16",
+            "--val-fraction",
+            "0.2",
+        ).returncode
+        == 0
+    )
+
+    output_path = tmp_path / "bench_result.json"
+    bench_config_path = tmp_path / "bench.yaml"
+    bench_config_path.write_text(
+        "name: cli-smoke\n"
+        "model:\n"
+        "  vocab_size: 280\n"
+        "  context_length: 16\n"
+        "  d_model: 16\n"
+        "  n_layers: 1\n"
+        "  n_heads: 2\n"
+        "  d_ff: 32\n"
+        "training:\n"
+        "  micro_batch_size: 4\n"
+        "  max_steps: 1000\n"
+        "  warmup_steps: 1\n"
+        "  eval_interval: 1000\n"
+        "  eval_batches: 1\n"
+        "  device: cpu\n"
+        "  precision: fp32\n"
+        f"train_tokens_path: {dataset_dir / 'train_tokens.npy'}\n"
+        f"val_tokens_path: {dataset_dir / 'val_tokens.npy'}\n"
+        "bench_warmup_steps: 1\n"
+        "measured_steps: 3\n"
+    )
+
+    proc = _run(
+        "benchmark", "run", "--config", str(bench_config_path), "--output", str(output_path)
+    )
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["name"] == "cli-smoke"
+    assert result["measured_steps"] == 3
+    assert result["tokens_per_sec"] > 0
+    assert output_path.exists()
+    assert json.loads(output_path.read_text(encoding="utf-8"))["name"] == "cli-smoke"

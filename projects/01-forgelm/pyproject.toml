@@ -25,6 +25,12 @@ dev = [
     "ruff>=0.6",
     "pyright>=1.1.380",
 ]
+# Only needed to render benchmarks/plots/*.png (scripts/plot_benchmarks.py)
+# -- kept out of the core runtime/dev install so `pip install -e ".[dev]"`
+# doesn't pull in a plotting stack nothing else in this project needs.
+plots = [
+    "matplotlib>=3.8",
+]
 
 [project.scripts]
 forgelm = "forgelm.cli.main:main"
