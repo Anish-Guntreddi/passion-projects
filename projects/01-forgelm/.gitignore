@@ -1,0 +1,6 @@
+# Project-local ignores (in addition to the portfolio root .gitignore).
+# Runtime output of `forgelm dataset build` etc. -- not source, not committed.
+artifacts/
+runs/
+# requirements-lock.txt IS committed (reproducibility risk mitigation,
+# see docs/reproducibility.md) -- intentionally not listed here.

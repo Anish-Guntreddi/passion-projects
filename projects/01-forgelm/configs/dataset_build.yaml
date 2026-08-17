@@ -1,0 +1,13 @@
+# Example config for `forgelm dataset build --config configs/dataset_build.yaml`.
+# Fields map 1:1 to forgelm.config.DatasetBuildConfig.
+#
+# `output_dir` makes this config file sufficient on its own to reproduce
+# the full artifact-producing run (FR1). Run
+# `forgelm tokenizer train --config configs/tokenizer_train.yaml` first to
+# produce the tokenizer.json this config points at. `artifacts/` is
+# gitignored (see .gitignore), so running this doesn't dirty the repo.
+input_path: examples/alice_in_wonderland.txt
+tokenizer_path: artifacts/tokenizer.json
+output_dir: artifacts/dataset
+context_length: 128
+val_fraction: 0.1

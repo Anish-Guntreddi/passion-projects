@@ -1,0 +1,5 @@
+# Example config for `forgelm smoke --config configs/smoke.yaml` (Phase 0
+# placeholder end-to-end command). Fields map 1:1 to forgelm.config.SmokeConfig.
+seed: 1337
+size: 64
+device: cpu

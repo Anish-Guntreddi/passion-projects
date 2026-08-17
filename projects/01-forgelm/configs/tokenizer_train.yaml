@@ -1,0 +1,10 @@
+# Example config for `forgelm tokenizer train --config configs/tokenizer_train.yaml`.
+# Fields map 1:1 to forgelm.config.TokenizerTrainConfig.
+#
+# `output_path` makes this config file sufficient on its own to reproduce
+# the full artifact-producing run (FR1: "all execution is CLI + config
+# driven") -- no separate --output flag is required. `artifacts/` is
+# gitignored (see .gitignore), so running this doesn't dirty the repo.
+input_path: examples/alice_in_wonderland.txt
+output_path: artifacts/tokenizer.json
+vocab_size: 512
