@@ -1,0 +1,12 @@
+# CMake-generated, project-local (root .gitignore already covers build/ and
+# object/binary artifacts anywhere in the repo — these are PebbleDB-specific
+# extras).
+compile_commands.json
+.cache/
+
+# Scratch WAL/SSTable files written by manually-run tools during
+# development (tests always use a fresh path under the OS temp directory,
+# never under the repo — see tests/support/temp_file.*).
+*.wal
+*.sst
+/scratch-data/
