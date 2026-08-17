@@ -2,12 +2,15 @@ name: arcserve-ci
 
 on:
   push:
+    branches: [main]
     paths:
       - "projects/05-arcserve/**"
-      - ".github/workflows/ci.yml"
+      - ".github/workflows/ci-arcserve.yml"
   pull_request:
+    branches: [main]
     paths:
       - "projects/05-arcserve/**"
+      - ".github/workflows/ci-arcserve.yml"
 
 defaults:
   run:

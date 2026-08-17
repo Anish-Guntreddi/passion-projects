@@ -1,0 +1,40 @@
+name: kernelforge-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "projects/02-kernelforge/**"
+      - ".github/workflows/ci-kernelforge.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "projects/02-kernelforge/**"
+      - ".github/workflows/ci-kernelforge.yml"
+
+defaults:
+  run:
+    working-directory: projects/02-kernelforge
+
+jobs:
+  compile:
+    name: Compile CUDA targets
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.6.3-devel-ubuntu24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y cmake ninja-build g++
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_CUDA_COMPILER=nvcc \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+      - name: Build all targets
+        run: cmake --build build --parallel

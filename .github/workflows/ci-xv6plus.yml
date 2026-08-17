@@ -1,0 +1,35 @@
+name: xv6plus-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "projects/07-xv6plus/**"
+      - ".github/workflows/ci-xv6plus.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "projects/07-xv6plus/**"
+      - ".github/workflows/ci-xv6plus.yml"
+
+defaults:
+  run:
+    working-directory: projects/07-xv6plus
+
+jobs:
+  build-and-test:
+    name: Build and run xv6-plus tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-riscv64-unknown-elf qemu-system-misc python3
+
+      - name: Build kernel and filesystem image
+        run: make kernel/kernel fs.img
+
+      - name: Run tests
+        run: timeout 120 python3 scripts/run_tests.py --skip-build
