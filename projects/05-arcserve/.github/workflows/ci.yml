@@ -1,0 +1,53 @@
+name: arcserve-ci
+
+on:
+  push:
+    paths:
+      - "projects/05-arcserve/**"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "projects/05-arcserve/**"
+
+defaults:
+  run:
+    working-directory: projects/05-arcserve
+
+jobs:
+  build-and-test:
+    name: build + test (${{ matrix.sanitizer }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [none, asan, ubsan, tsan]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake g++
+
+      - name: Configure + build
+        run: bash scripts/build.sh Debug ${{ matrix.sanitizer }}
+
+      - name: Test
+        run: ctest --test-dir build/Debug-${{ matrix.sanitizer }} --output-on-failure
+
+  static-analysis:
+    name: clang-tidy + clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake clang-tidy clang-format
+
+      - name: clang-format --dry-run
+        run: bash scripts/format.sh --dry-run
+
+      - name: clang-tidy
+        run: bash scripts/lint.sh

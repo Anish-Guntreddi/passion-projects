@@ -1,0 +1,5 @@
+# CMake-generated, project-local (root .gitignore already covers build/ and
+# object/binary artifacts anywhere in the repo — these are ArcServe-specific
+# extras).
+compile_commands.json
+.cache/
