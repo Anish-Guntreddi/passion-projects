@@ -42,3 +42,4 @@ Thumbs.db
 # Scratch
 .context/
 *.log
+.gpu-bench-lock/
