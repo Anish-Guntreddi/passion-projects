@@ -12,14 +12,14 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 
 | Project | Wave | Current phase | Status | Notes |
 |---|---|---|---|---|
-| 01 ForgeLM | 1 | 6 | 0–5 DONE (…, 67cc676/337d9d3: 263 tests, all numbers verified vs raw) · 6 (final!) in wave wf_a7589364 | portfolio hardening + fresh-clone verify |
-| 02 KernelForge | 1b | 6–7 | 0–5 DONE (…, e56704b/948ae10: 143 tests, 166 records; %-convention fixed at gate) · 6–7 in wave wf_a7589364 | profiling (ncu availability TBD, honest-disclosure fallback) + release |
-| 03 MiniPaged | 2 | 4–5 | 0–3 DONE (235402e, 5ba0bbd) · 4–5 in wave wf_a7589364 | prefix sharing/COW + real model adapter |
-| 04 FlashLite | 2 | 4–5 | 0–3 DONE (…, dd773fa/e5bd626: 161 GPU tests, L2-decay hypothesis confirmed 0.03%) · 4–5 in impl wf_e4ebcd17 | online softmax + fused IO-aware attention |
-| 05 ArcServe | 1 | 6–7 | 0–5 DONE (…, 7d47516: 187 tests × 4 sanitizers, 2 review-caught concurrency bugs fixed) · 6–7 in impl wf_e4ebcd17 | timeouts/backpressure/shutdown + observability |
-| 06 PebbleDB | 2 | 4–5 | 0–3 DONE (9550b96, 971b8bf: 168 tests × sanitizers) · 4–5 in wave wf_a7589364 | flush + manifest, bloom filter + cache |
-| 07 xv6-plus | 1 | 6–7 | 0–5 DONE (…, bc48c92: lottery sched + lazy VM, usertests 223.5s) · 6–7 in wave wf_a7589364 | stress/race hardening + observability report |
-| 08 ReleaseGuard | 1 | 6–7 | 0–5 DONE (…, 4f45a23: controller 80 tests, CI covers both modules) · 6–7 in wave wf_a7589364 | k8s action adapter + failure scenarios |
+| 01 ForgeLM | 1 | 6 | 0–5 DONE (…, 67cc676/337d9d3: 263 tests, all numbers verified vs raw) · 6 (final!) in wave wf_cd28e4f7 | portfolio hardening + fresh-clone verify |
+| 02 KernelForge | 1b | 6–7 | 0–5 DONE (…, e56704b/948ae10: 143 tests, 166 records; %-convention fixed at gate) · 6–7 in wave wf_cd28e4f7 | profiling (ncu TBD, honest-disclosure fallback) + release |
+| 03 MiniPaged | 2 | 4–5 | 0–3 DONE (235402e, 5ba0bbd) · 4–5 in wave wf_cd28e4f7 | prefix sharing/COW + real model adapter |
+| 04 FlashLite | 2 | 4–5 | 0–3 DONE (…, dd773fa/e5bd626: 161 GPU tests, L2-decay hypothesis confirmed 0.03%) · 4–5 in impl wf_02c6b723 | online softmax + fused IO-aware attention |
+| 05 ArcServe | 1 | 6–7 | 0–5 DONE (…, 7d47516: 187 tests × 4 sanitizers, 2 review-caught concurrency bugs fixed) · 6–7 in impl wf_02c6b723 | timeouts/backpressure/shutdown + observability |
+| 06 PebbleDB | 2 | 4–5 | 0–3 DONE (9550b96, 971b8bf: 168 tests × sanitizers) · 4–5 in wave wf_cd28e4f7 | flush + manifest, bloom filter + cache |
+| 07 xv6-plus | 1 | 6–7 | 0–5 DONE (…, bc48c92: lottery sched + lazy VM, usertests 223.5s) · 6–7 in wave wf_cd28e4f7 | stress/race hardening + observability report |
+| 08 ReleaseGuard | 1 | 6–7 | 0–5 DONE (…, 4f45a23: controller 80 tests, CI covers both modules) · 6–7 in wave wf_cd28e4f7 | k8s action adapter + failure scenarios |
 | 09 Helios | 3 | — | waiting (capstone) | must be last |
 | Showcase site | 4 | — | waiting (all) | GitHub Pages |
 
@@ -51,3 +51,4 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 - **2026-08-17 · Gate rule for GPU benchmarks** — correctness tests may run in parallel across projects, but benchmark artifacts that back README claims are regenerated serialized (quiet GPU) after gates pass, then committed separately (constraint 9).
 - **2026-08-17 · Gate outcome (wf_85e7b308)** — 5/6 commit-ready on first verify; KernelForge blocked on doc-vs-data transcription errors in methodology §10/§9.2 + README (V3 histogram table computed from wrongly transcribed values, reversing the uniform/skewed direction claim). Orchestrator recomputed all numbers from committed raw JSONL and corrected docs before committing. Lesson: every gate now includes recompute-doc-claims-from-raw as a standard verifier step.
 - **2026-08-17 · GPU benchmark lock** — measured-claim benchmark runs must hold the repo-level lock (`mkdir /mnt/c/.../.gpu-bench-lock`, atomic; rmdir to release; gitignored). Development and correctness tests parallelize freely; only measurement serializes. FlashLite 0-1 launched before this protocol — its baseline artifacts get a quiet-GPU sanity re-check before committing.
+- **2026-08-17 · Usage-limit interruption** — wf_e4ebcd17 and wf_a7589364 died mid-implement at the 5:40pm ET session-limit reset boundary, leaving partial uncommitted work in all eight project trees. Relaunched at 6:12pm as wf_02c6b723 / wf_cd28e4f7 with a prior-run note telling implementers to inventory and continue from the partial tree rather than restart. (Workflow scripts must be saved with LF endings — CRLF trips the control-character validation on relaunch.)
