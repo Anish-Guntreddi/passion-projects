@@ -13,7 +13,7 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 | Project | Wave | Current phase | Status | Notes |
 |---|---|---|---|---|
 | 01 ForgeLM | 1 | 0–1 | in-progress (wf_2d7c2ef0) | Python/PyTorch; CPU tests, GPU runs |
-| 02 KernelForge | 1b | 0–1 | in-progress (wf_abbea9dd) | nvcc 12.6 verified, GPU smoke PASS |
+| 02 KernelForge | 1b | 2–3 | phases 0–1 DONE (57/57 tests, sanitizer clean, artifacts committed 289480c/84a7308) | reduction/scan + atomics next |
 | 03 MiniPaged | 2 | — | waiting (ForgeLM) | |
 | 04 FlashLite | 2 | — | waiting (KernelForge) | |
 | 05 ArcServe | 1 | 0–1 | in-progress (wf_2d7c2ef0) | epoll → WSL |
