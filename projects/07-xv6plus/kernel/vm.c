@@ -449,26 +449,64 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 // that was lazily allocated in sys_sbrk().
 // returns 0 if va is invalid or already mapped, or if
 // out of physical memory, and physical address if successful.
+//
+// xv6-plus (Phase 5, FR6, ADR-0011/ADR-0012): every call is counted
+// into myproc()'s own p->pagefaults (success) or p->pagefaults_failed
+// (address beyond p->sz, or kalloc()/mappages() failure -- i.e.
+// physical memory exhaustion) -- see kernel/proc.h for the field
+// definitions. The "already mapped" case just below is deliberately
+// NOT counted either way: from this process's point of view no fault
+// actually happened (another hart's concurrent fault handler for the
+// same va already resolved it), so it isn't a page-in and isn't a
+// failure. Counters are incremented without p->lock, following the
+// same lock-free "owner-only mutation" convention as trace_mask --
+// see docs/decisions/0012-pagefault-telemetry-locking.md for why that
+// convention was chosen specifically over taking p->lock here (a real
+// lock-order hazard against kwait()'s copyout(), not just a style
+// preference).
 uint64
 vmfault(pagetable_t pagetable, uint64 va, int read)
 {
   uint64 mem;
   struct proc *p = myproc();
 
-  if (va >= p->sz)
+  if (va >= p->sz) {
+    p->pagefaults_failed++;
     return 0;
+  }
   va = PGROUNDDOWN(va);
   if(ismapped(pagetable, va)) {
+    // Already mapped: two distinct reasons this branch can be hit.
+    //  (a) A genuine permission violation -- va is validly mapped but
+    //      lacks the permission bit this specific access (read vs.
+    //      write) needs, e.g. a store to a read-only/text page
+    //      (kernel/exec.c: flags2perm()). This is a real,
+    //      unserviceable fault -- the caller (usertrap(), for a
+    //      direct instruction-level fault) still kills the process,
+    //      so it is counted here exactly like the two failure
+    //      branches below. See vm_permission_violation() and
+    //      kernel/trap.c's diagnostic split.
+    //  (b) A benign race: another hart's concurrent lazy-fault
+    //      handler for this same va already resolved it since the
+    //      caller's own walkaddr() check (copyout()/copyin() reach
+    //      this branch this way). Nothing to do, and not a fault from
+    //      this process's point of view -- deliberately NOT counted.
+    if(vm_permission_violation(pagetable, va, read))
+      p->pagefaults_failed++;
     return 0;
   }
   mem = (uint64) kalloc();
-  if(mem == 0)
+  if(mem == 0) {
+    p->pagefaults_failed++;
     return 0;
+  }
   memset((void *) mem, 0, PGSIZE);
   if (mappages(p->pagetable, va, PGSIZE, mem, PTE_W|PTE_U|PTE_R) != 0) {
     kfree((void *)mem);
+    p->pagefaults_failed++;
     return 0;
   }
+  p->pagefaults++;
   return mem;
 }
 
@@ -483,4 +521,48 @@ ismapped(pagetable_t pagetable, uint64 va)
     return 1;
   }
   return 0;
+}
+
+// xv6-plus (permission-fault fix, spec Â§1.9 "invalid address/
+// permission cases"): true if va is validly mapped (PTE_V) in
+// pagetable but lacks the permission bit this specific access needs
+// -- PTE_R for a load (read != 0), PTE_W for a store (read == 0) --
+// i.e. a genuine permission violation, distinct from an out-of-bounds
+// address or an out-of-memory failure. va need not be page-aligned.
+//
+// Used two ways: vmfault() above calls this (only once it already
+// knows va is mapped) to decide whether an already-mapped page it
+// declined to touch was actually a permission violation worth
+// counting into pagefaults_failed, or a benign concurrent-fault race
+// that isn't. kernel/trap.c calls it again, after vmfault() has
+// already returned 0 for the same (pagetable, va, read) -- including
+// vmfault()'s va >= p->sz (out-of-bounds) failure branch, which never
+// calls walk() at all and so never validates va against MAXVA -- to
+// pick an accurate diagnostic message. This process is the only hart
+// that can be mutating its own page table at fault time, so there is
+// no new race introduced by checking twice, but va itself, coming
+// from kernel/trap.c's raw r_stval() in the out-of-bounds case, is
+// NOT guaranteed to be < MAXVA the way vmfault()'s own internal
+// ismapped() call already is (that call is only reached after
+// vmfault() has confirmed va < p->sz, and p->sz can never approach
+// MAXVA in practice). walk() itself panics on va >= MAXVA
+// unconditionally (kernel/vm.c: walk()), so this function must guard
+// against that itself before calling it -- the same guard walkaddr()
+// (this same file) already applies for exactly this reason. Omitting
+// this guard was a real regression, caught by re-running upstream's
+// own usertests (its `MAXVAplus` case deliberately faults on an
+// address >= MAXVA without growing p->sz, hitting exactly vmfault()'s
+// va >= p->sz branch and, before this guard, panicking the kernel
+// instead of cleanly killing the process).
+int
+vm_permission_violation(pagetable_t pagetable, uint64 va, int read)
+{
+  va = PGROUNDDOWN(va);
+  if(va >= MAXVA)
+    return 0;
+  pte_t *pte = walk(pagetable, va, 0);
+  if(pte == 0 || (*pte & PTE_V) == 0)
+    return 0;
+  int needed = read ? PTE_R : PTE_W;
+  return (*pte & needed) == 0;
 }

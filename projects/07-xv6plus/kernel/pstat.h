@@ -38,4 +38,19 @@ struct xv_pstat {
   uint64 waitticks;         // ticks accounted as SLEEPING (blocked/waiting)
   uint64 syscalls;          // total syscalls made since process creation
   char   name[XV_NAMESZ];   // process name (kernel/proc.h: p->name)
+
+  // xv6-plus (Phase 4, FR5): lottery-scheduler fields. tickets mirrors
+  // p->tickets (kernel/proc.h); selections mirrors p->sched_selections
+  // -- see docs/scheduler.md and docs/decisions/0010-lottery-scheduler-design.md.
+  uint64 tickets;
+  uint64 selections;
+
+  // xv6-plus (Phase 5, FR6): page-fault telemetry fields, mirroring
+  // p->pagefaults / p->pagefaults_failed (kernel/proc.h) -- see
+  // docs/vm-extension.md and
+  // docs/decisions/0012-pagefault-telemetry-locking.md for why these
+  // two, like sz/name above, are best-effort (not hard-guaranteed
+  // torn-free) reads.
+  uint64 pagefaults;
+  uint64 pagefaults_failed;
 };

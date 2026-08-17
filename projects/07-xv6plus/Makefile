@@ -4,7 +4,11 @@
 # the xv6-plus-original user programs below ($U/_xtrace, $U/_tracetest
 # from Phase 1; $U/_accttest, $U/_acctforktest, $U/_acctexectest,
 # $U/_acctreport, $U/_xvstatbounds, $U/_xvtop, $U/_xvtopzombie from
-# Phase 2/3). See docs/upstream-delta.md for the full delta and
+# Phase 2/3; $U/_schedbench, $U/_tixtest, $U/_tixvalidate from Phase 4;
+# $U/_vmfaulttest, $U/_vmoobtest, $U/_vmforktest, $U/_vmexectest,
+# $U/_vmexhausttest, $U/_vmpermtest, $U/_vmpfailcount from Phase 5,
+# the last two added during review-fix followup). See
+# docs/upstream-delta.md for the full delta and
 # docs/decisions/0001-upstream-revision-pin.md for the pin rationale.
 
 K=kernel
@@ -160,6 +164,16 @@ UPROGS=\
 	$U/_xvstatbounds\
 	$U/_xvtop\
 	$U/_xvtopzombie\
+	$U/_schedbench\
+	$U/_tixtest\
+	$U/_tixvalidate\
+	$U/_vmfaulttest\
+	$U/_vmoobtest\
+	$U/_vmforktest\
+	$U/_vmexectest\
+	$U/_vmexhausttest\
+	$U/_vmpermtest\
+	$U/_vmpfailcount\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

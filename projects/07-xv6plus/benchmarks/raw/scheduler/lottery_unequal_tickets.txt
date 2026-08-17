@@ -1,0 +1,13 @@
+# command: schedbench 1 60 20 10 5 60 20 10
+# captured: 2026-08-17T16:55:02.904587Z
+# wall_elapsed_seconds: 3.08
+schedbench 1 60 20 10 5 60 20 10
+schedbench: report pid=12 tickets=60 start=32 end=62 elapsed=30 runticks=22 waitticks=0 selections=23
+schedbench: report pid=13 tickets=20 start=32 end=62 elapsed=30 runticks=17 waitticks=0 selections=18
+schedbench: report pid=14 tickets=10 start=32 end=62 elapsed=30 runticks=6 waitticks=0 selections=7
+schedbench: report pid=15 tickets=5 start=32 end=62 elapsed=30 runticks=5 waitticks=0 selections=6
+schedbench: report pid=16 tickets=60 start=32 end=62 elapsed=30 runticks=22 waitticks=0 selections=23
+schedbench: report pid=17 tickets=20 start=32 end=62 elapsed=30 runticks=6 waitticks=0 selections=7
+schedbench: report pid=18 tickets=10 start=32 end=62 elapsed=30 runticks=10 waitticks=0 selections=11
+schedbench: done
+$ 

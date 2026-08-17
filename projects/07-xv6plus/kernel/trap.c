@@ -68,9 +68,43 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if((r_scause() == 15 || r_scause() == 13) &&
-            vmfault(p->pagetable, r_stval(), (r_scause() == 13)? 1 : 0) != 0) {
-    // page fault on lazily-allocated page
+  } else if(r_scause() == 15 || r_scause() == 13){
+    // xv6-plus (Phase 5, FR6): a genuine page fault (store=15,
+    // load=13) on a user address -- try the existing lazy-allocation
+    // fault path. vmfault() (kernel/vm.c) itself counts the attempt
+    // (p->pagefaults or p->pagefaults_failed) regardless of outcome,
+    // so telemetry is accurate on both branches below. Splitting this
+    // into its own scause branch, instead of upstream's combined
+    // `&& vmfault(...) != 0` condition, changes no control-flow
+    // decision (still: continue on success, kill on failure) -- it
+    // only lets a recognized-but-unserviceable fault print its own
+    // diagnostic instead of falling into the same "unexpected
+    // scause" message a truly-unrecognized trap type gets below. See
+    // docs/vm-extension.md and tests/vm/test_oob_access_killed.py.
+    int isload = (r_scause() == 13) ? 1 : 0;
+    if(vmfault(p->pagetable, r_stval(), isload) == 0){
+      // xv6-plus (permission-fault fix): vmfault() failing has two
+      // structurally different causes -- an out-of-bounds/out-of-
+      // memory failure (the message below already described this
+      // correctly) or a permission violation on an already-mapped
+      // page (e.g. a store to a read-only/text page), which is
+      // neither out-of-bounds nor out-of-memory and deserves its own
+      // accurate message. vm_permission_violation() (kernel/vm.c)
+      // re-checks the exact same (pagetable, va, read) vmfault() was
+      // just given to tell them apart -- see
+      // tests/vm/test_permission_fault_killed.py.
+      if(vm_permission_violation(p->pagetable, r_stval(), isload)){
+        printf("usertrap(): page fault (scause=0x%lx) could not be serviced "
+               "(permission violation: %s access to a page mapped without "
+               "sufficient permission) pid=%d va=0x%lx\n",
+               r_scause(), isload ? "read" : "write", p->pid, r_stval());
+      } else {
+        printf("usertrap(): page fault (scause=0x%lx) could not be serviced "
+               "(invalid address or out of memory) pid=%d va=0x%lx\n",
+               r_scause(), p->pid, r_stval());
+      }
+      setkilled(p);
+    }
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());

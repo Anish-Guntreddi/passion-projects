@@ -26,3 +26,7 @@
 // xv6-plus: FR2/FR3 per-process accounting stats interface (Phase 2).
 // Not part of upstream xv6; see docs/upstream-delta.md.
 #define SYS_xvstat 23
+// xv6-plus: FR5 scheduler-experiment control (Phase 4). Not part of
+// upstream xv6; see docs/upstream-delta.md.
+#define SYS_settickets  24
+#define SYS_schedpolicy 25

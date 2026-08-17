@@ -218,3 +218,197 @@ no single atomic whole-table snapshot).
 removing `user/xvtop.c`, `user/xvtopzombie.c`, and their two `UPROGS`
 entries -- Phase 1/2 and all upstream behavior are otherwise
 untouched.
+
+### Phase 4 (scheduler experiment, FR5)
+
+New files:
+
+| File | What |
+|---|---|
+| `kernel/sched.h` | `SCHED_RR`/`SCHED_LOTTERY` policy constants, `SCHED_DEFAULT_TICKETS` -- shared kernel/user header, same convention as `kernel/vm.h`'s `SBRK_EAGER`/`SBRK_LAZY`. |
+| `user/schedbench.c` | Benchmark driver: sets a policy, forks one child per ticket count, each child spins a fixed wall-clock window, self-reports via a private pipe (avoids cross-process console interleaving -- see `docs/scheduler.md`). |
+| `user/tixtest.c` | Lifecycle test program: tickets inherited across `fork()`, reset to default on slot reuse. |
+| `user/tixvalidate.c` | `settickets()`/`schedpolicy()` argument-validation test program. |
+| `tests/scheduler/*.py`, `tests/scheduler/_sched_helpers.py` | Phase 4 automated test suite (see `docs/scheduler.md`). |
+| `docs/scheduler.md` | Phase 4 design writeup: policy switch, PRNG, lifecycle, zero-ticket floor, calibration, captured benchmark data. |
+| `docs/decisions/0010-lottery-scheduler-design.md` | ADR: PRNG choice, two-pass-draw-with-bounded-retry design, tickets/selections lifecycle, zero-ticket floor -- the implementation questions ADR-0004 deferred. |
+
+Touched files (all changes marked inline with `// xv6-plus:`
+comments):
+
+| File | Change |
+|---|---|
+| `kernel/proc.h` | Added `int tickets`, `uint64 sched_selections` to `struct proc`. |
+| `kernel/proc.c` | New globals `sched_policy`/`sched_lock`/`rng_state`. `allocproc()`/`freeproc()`: init/reset both fields. `kfork()`: `tickets` inherited (like `trace_mask`), `sched_selections` not (like the Phase 2 counters). `scheduler()`'s loop split into `schedule_roundrobin()` (upstream logic, unchanged, refactored) and new `schedule_lottery()`/`lottery_rand()`/`runnable_ticket_total()`/`draw_and_run()`/`pick_first_runnable()`/`run_selected()`. Added `sched_settickets()`/`sched_setpolicy()`. `procstat()` extended to fill `tickets`/`selections`. |
+| `kernel/sysproc.c` | Added `sys_settickets()`, `sys_schedpolicy()`. |
+| `kernel/syscall.h` | Added `#define SYS_settickets 24`, `#define SYS_schedpolicy 25`. |
+| `kernel/syscall.c` | Added both to the dispatch table and `syscall_names[]`. |
+| `kernel/defs.h` | Added `sched_settickets()`/`sched_setpolicy()` prototypes. |
+| `kernel/pstat.h` | `struct xv_pstat` gains `tickets`/`selections`. |
+| `user/user.h` | Added `int settickets(int)`, `int schedpolicy(int)` prototypes. |
+| `user/usys.pl` | Added `entry("settickets")`, `entry("schedpolicy")`. |
+| `user/acct.h` | Comment broadened: `xv_find_self()` is now reused by Phase 4 (and Phase 5) programs too, no logic change. |
+| `Makefile` | Added `$U/_schedbench`, `$U/_tixtest`, `$U/_tixvalidate` to `UPROGS`. |
+| `docs/invariants.md` | Updated all eight rows through Phase 4/5 status. |
+| `docs/decisions/0004-scheduler-policy.md` | Status updated from "implementation deferred" to "implemented," pointing at ADR-0010. |
+| `README.md` | Added the FR5 "Original features" entry; updated the roadmap status table. |
+| `tests/scheduler/README.md` | Removed (placeholder retired now that the phase is implemented -- matches the convention Phases 1-3's test directories already follow: no placeholder README once a directory has real tests). |
+
+**ABI change:** two new syscall numbers (24 `SYS_settickets`, 25
+`SYS_schedpolicy`); no existing syscall numbers, signatures, or
+return-value conventions changed. `struct xv_pstat` (Phase 2, ADR-0003)
+gains two fields, appended at the end -- purely additive, no existing
+field's offset or meaning changes.
+
+**Invariants at stake:** #2 (one new lock, `sched_lock`, deliberately
+scoped as a leaf lock -- see ADR-0010), #3 (tickets/selections
+init/fork/exec/exit semantics), #4 (directly tested for the first
+time: the zero-ticket-floor fallback), #5 (slot reuse resets both new
+fields), #7 (both new syscalls' argument validation is tested), #8
+(regression-checked after every deliberately-adversarial test case).
+See `docs/invariants.md` for the full mapping and `docs/scheduler.md`
+for the design writeup.
+
+**Lock/lifetime:** one new lock, `sched_lock`, protecting `sched_policy`
+and the lottery PRNG state -- deliberately never held while any
+`p->lock` is held, and nothing reachable while holding it acquires a
+`p->lock`, so it introduces no new edge in the existing
+`wait_lock -> p->lock` lock-order graph. `tickets` takes `p->lock` on
+write (ADR-0006 case (b): read cross-process by the scheduler as a
+real input, not just monitored); `sched_selections` is written only by
+`scheduler()` itself while already holding the target process's own
+`p->lock` (no separate acquire needed, same pattern as `runticks`).
+
+**Test:** `tests/scheduler/test_tickets_lifecycle.py`,
+`test_settickets_validation.py`, `test_schedpolicy_validation.py`,
+`test_sched_baseline_fairness.py`, `test_sched_lottery_fairness.py`,
+`test_lottery_zero_ticket_floor.py`. Run via `scripts/run-tests.sh`.
+Also re-verified against upstream's own `usertests` regression suite
+(`ALL TESTS PASSED`, ~223.5s, this build) with all Phase 4 fields/locks
+live throughout (baseline `SCHED_RR` policy the whole run, since
+`usertests` never calls `schedpolicy()`).
+
+**Rollback/debug strategy:** additive and separately identifiable via
+`// xv6-plus:` comments, same discipline as every earlier phase.
+Reverting Phase 4 means removing the two `struct proc` fields, the
+`sched_lock`/`sched_policy`/`rng_state` globals, the
+`schedule_lottery()` call graph (leaving `schedule_roundrobin()`, which
+is upstream's own loop, as the sole scheduler), the two new syscalls,
+and the three new Phase 4 user programs -- upstream's round-robin
+behavior and every earlier phase are otherwise untouched (indeed
+`schedule_roundrobin()` *is* upstream's own loop, unmodified in
+control flow).
+
+### Phase 5 (VM extension: page-fault telemetry, FR6)
+
+New files:
+
+| File | What |
+|---|---|
+| `user/vmfaulttest.c` | Basic telemetry correctness: `sbrklazy()` alone counts nothing; touching N pages counts exactly N; re-touching doesn't double-count. |
+| `user/vmoobtest.c` | Out-of-bounds access: a child dereferencing far beyond its own `sz` is killed cleanly; the parent/session stays healthy. |
+| `user/vmforktest.c` | Fork isolation: a child's own fault-in of an inherited-but-unmapped lazy region is independent of the parent's counters. |
+| `user/vmexectest.c` | Exec safety: a pending, never-touched lazy region doesn't crash or leak across `exec()`. |
+| `user/vmexhausttest.c` | Real memory exhaustion + reclaim-on-exit proof. |
+| `tests/vm/*.py` | Phase 5 automated test suite (see `docs/vm-extension.md`). |
+| `docs/vm-extension.md` | Phase 5 design writeup: honesty-layer split (what's upstream vs. original in this feature), locking, lifecycle, memory-exhaustion test configuration, captured real runs. |
+| `docs/decisions/0011-vm-extension-choice.md` | ADR: finalizes D5 (page-fault telemetry), superseding ADR-0005's deferral. |
+| `docs/decisions/0012-pagefault-telemetry-locking.md` | ADR: why the new counters are deliberately lock-free (a real lock-order hazard against `kwait()`'s `copyout()`, not a style choice). |
+
+Touched files (all changes marked inline with `// xv6-plus:`
+comments):
+
+| File | Change |
+|---|---|
+| `kernel/proc.h` | Added `uint64 pagefaults`, `uint64 pagefaults_failed` to `struct proc`. |
+| `kernel/proc.c` | `allocproc()`/`freeproc()`: init/reset both fields. `kfork()`: neither inherited (comment only -- both are already 0 from `allocproc()`, same as the Phase 2 counters). `procstat()` extended to fill both. |
+| `kernel/vm.c` | `vmfault()`: increments `p->pagefaults`/`p->pagefaults_failed` at each of its three outcomes. No change to the actual allocation/mapping logic (that part is upstream, category (A)). |
+| `kernel/trap.c` | `usertrap()`'s combined `(scause==13\|\|15) && vmfault(...)!=0` condition split into its own branch with a specific diagnostic on failure -- same continue-on-success/kill-on-failure decision, clearer message only. |
+| `kernel/pstat.h` | `struct xv_pstat` gains `pagefaults`/`pagefaults_failed`. |
+| `docs/invariants.md` | Updated all eight rows; invariant #6 gets real test coverage for the first time. |
+| `docs/decisions/0005-vm-extension.md` | Status updated to "Superseded by ADR-0011." |
+| `README.md` | Added the FR6 "Original features" entry; updated the roadmap status table. |
+| `tests/vm/README.md` | Removed (same convention as `tests/scheduler/README.md` above). |
+
+**ABI change:** **none** -- no new syscall. `struct xv_pstat` gains
+two fields, appended at the end (purely additive, same as Phase 4's
+addition to the same struct).
+
+**Invariants at stake:** #1 (accounting never corrupts process
+lifecycle state -- `usertests` `ALL TESTS PASSED` with the new fields
+live), #2 (a lock-order hazard was found and specifically avoided, not
+just "no new lock was added" -- see ADR-0012), #3 (neither field
+inherited across `fork()`, matching the Phase 2 counter pattern), #5
+(reset on free), #6 (directly tested for the first time in this
+project: out-of-bounds kill, exhaustion+reclaim, fork isolation), #8
+(every deliberately-adversarial Phase 5 test case is followed by a
+regression check, and the `kernel/trap.c` diagnostic split is itself a
+small hardening of observability without changing any control-flow
+decision). See `docs/invariants.md` and `docs/vm-extension.md`.
+
+**Lock/lifetime:** no new lock. The two counters are deliberately
+lock-free (ADR-0012): mutated only by `vmfault()` acting on
+`myproc()`, so there is no concurrent-writer race; read cross-process
+by `xvstat(2)` with the same accepted best-effort staleness ADR-0009
+already established for `sz`/`name` in the same struct -- not a new
+precedent, an extension of an existing one, chosen specifically
+because taking `p->lock` inside `vmfault()` would have introduced a
+lock-order edge `kwait()`'s `copyout()` doesn't currently have.
+
+**Test:** `tests/vm/test_pagefault_counting.py`,
+`test_oob_access_killed.py`, `test_fork_lazy_region.py`,
+`test_exec_discards_lazy_region.py`,
+`test_memory_exhaustion_recovery.py`. Run via `scripts/run-tests.sh`.
+Also re-verified against upstream's own `usertests` regression suite
+(`ALL TESTS PASSED`, ~223.5s, this build) -- notably including
+`usertests`' own `lazytests` group, which exhausts memory via this
+exact `vmfault()` path and now prints this project's new, more
+specific diagnostic message instead of upstream's generic one, while
+still reporting `OK`.
+
+**Rollback/debug strategy:** additive and separately identifiable via
+`// xv6-plus:` comments. Reverting Phase 5 means removing the two
+`struct proc` fields, their three touch points in
+`proc.c`/`vm.c`/`trap.c` (`trap.c`'s revert restores upstream's single
+combined condition exactly), and the five new Phase 5 user programs --
+the underlying lazy-allocation mechanism itself is upstream and
+untouched either way, so a revert cannot regress `sbrk()`/lazy-fault
+behavior, only this project's telemetry and tests of it.
+
+### Phase 4/5 review-fix followup (correctness gaps found by external review)
+
+New files:
+
+| File | What |
+|---|---|
+| `user/vmpermtest.c` | Permission-violation test: a child writing to its own read-only text segment is killed with an accurate diagnostic, not the generic OOB/OOM one. |
+| `user/vmpfailcount.c` | Direct `pagefaults_failed` counter verification (before/after, in a process that survives the failure it triggers -- via a deliberately out-of-bounds `xvstat(2)` output pointer). |
+| `tests/vm/test_permission_fault_killed.py` | Drives `vmpermtest.c`. |
+| `tests/vm/test_pagefault_failed_counted.py` | Drives `vmpfailcount.c`. |
+| `docs/decisions/0013-ticket-count-bound.md` | ADR: `SCHED_MAX_TICKETS`, closing a PRNG-modulo-truncation correctness gap in the lottery draw. |
+
+Touched files (all changes marked inline with `// xv6-plus:` comments):
+
+| File | Change |
+|---|---|
+| `kernel/sched.h` | Added `SCHED_MAX_TICKETS` (100000). |
+| `kernel/proc.c` | `sched_settickets()` now also rejects `n > SCHED_MAX_TICKETS`. |
+| `kernel/vm.c` | New `vm_permission_violation(pagetable, va, read)` helper; `vmfault()`'s "already mapped" branch now counts `pagefaults_failed` only for a genuine permission violation (checked via the new helper), not for the benign concurrent-fault-race case. **A real regression was introduced and then caught by a full `usertests` re-run** (this project's own required verification step for any `vmfault()`/`trap.c` change): the first version of `vm_permission_violation()` called `walk()` directly without the `va >= MAXVA` guard `walkaddr()` (this same file) already carries, so `usertests`' `MAXVAplus` case -- which faults on an address `>= MAXVA` without growing `p->sz`, reaching `kernel/trap.c`'s new call to this helper with that raw address -- panicked the kernel (`walk()` panics unconditionally on `va >= MAXVA`) instead of cleanly killing the process. Fixed before this followup was considered done; see `docs/vm-extension.md`'s "Test coverage" section for the full account. |
+| `kernel/trap.c` | The page-fault failure branch now calls `vm_permission_violation()` to print a distinct, accurate diagnostic for a permission violation vs. an out-of-bounds/out-of-memory failure. |
+| `kernel/defs.h` | Declares `vm_permission_violation()`. |
+| `kernel/proc.h` | `pagefaults_failed` field comment updated to mention the permission-violation case. |
+| `user/schedbench.c` | `MAX_CHILDREN` corrected from a hardcoded, wrong `30` (`MAXARG - 2`) to `NOFILE - 4` (12), reflecting this program's real per-process fd budget; verified directly against a real build (see `docs/scheduler.md`). |
+| `user/tixvalidate.c` | Added `settickets(SCHED_MAX_TICKETS +/- boundary)` cases. |
+| `tests/scheduler/test_settickets_validation.py` | Asserts the new ticket-count-bound cases. |
+| `docs/scheduler.md` | Corrected the "Captured real run" transcript block to match `benchmarks/raw/scheduler/*.txt` (an earlier hand-typed version did not); corrected the "monotonic-by-ticket-tier" narrative claim to "monotonic-by-tier-*average*" (individual runs are noisier); rewrote "Zero-ticket floor" to state the precise, narrower guarantee; corrected `MAX_CHILDREN`'s documented capacity. |
+| `README.md` | Same transcript correction (FR5 section); softened the zero-ticket-floor claim; updated FR6 section and the "Verify it yourself" transcript (25/25 -> 27/27, two new tests). |
+| `docs/decisions/0010-lottery-scheduler-design.md` | Decision 5 rewritten to state the zero-ticket floor's precise scope. |
+| `docs/invariants.md` | Invariant #4 and #6 rows, and the "Known, deliberate limitations" section, updated with the corrections above. |
+| `docs/vm-extension.md` | New review-followup subsection, coverage-table row split (invalid address vs. permission), new captured transcripts, diagnostic-message description updated. |
+| `benchmarks/methodology.md` | Unaffected -- independently re-verified during this same review and found already correct; the bug was only in the two docs above, which now match it. |
+
+**Why these are correctness/documentation fixes, not new features:**
+each item above was found by an external review of the Phase 4/5 work
+already described earlier in this file; none of them changes what
+Phase 4/5 were trying to build, only whether the code and docs
+actually deliver what they claim.

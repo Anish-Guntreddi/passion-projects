@@ -136,4 +136,53 @@ struct proc {
   uint64 runticks;      // ticks this process has spent RUNNING (ADR-0007)
   uint64 waitticks;     // ticks this process has spent SLEEPING (blocked)
   uint64 syscall_count; // total syscalls made since process creation
+
+  // xv6-plus: scheduler experiment (Phase 4, FR5, ADR-0004, ADR-0010).
+  //
+  // tickets: this process's lottery-ticket count (>=0). Mutated by the
+  // owning process itself via settickets() (kernel/sysproc.c) -- BUT
+  // unlike trace_mask, it is also read cross-process by the lottery
+  // scheduler (kernel/proc.c: schedule_lottery(), which may run on any
+  // hart) as a genuine scheduling input, not just a monitoring
+  // display. So settickets() takes p->lock on write, matching
+  // ADR-0006 case (b) rather than case (a), even though the writer is
+  // always the owning process itself -- see
+  // docs/decisions/0010-lottery-scheduler-design.md. Defaults to
+  // SCHED_DEFAULT_TICKETS at allocation (kernel/sched.h); inherited
+  // across fork() (like trace_mask, unlike the Phase 2 accounting
+  // counters just above) so a forked workload keeps its parent's
+  // configured share; reset to 0 on free.
+  int tickets;
+  // sched_selections: number of times the scheduler (under either
+  // policy) has chosen this process to run. Mutated only by
+  // scheduler() itself, and only ever while already holding this
+  // exact process's p->lock (the same critical section that flips
+  // p->state to RUNNING) -- so, like runticks, no additional lock is
+  // needed. Not inherited across fork() (like the Phase 2 counters:
+  // a child's own selection history is its own, not a copy of the
+  // parent's). Reset to 0 on allocation and free.
+  uint64 sched_selections;
+
+  // xv6-plus: VM extension -- page-fault telemetry (Phase 5, FR6,
+  // ADR-0011/ADR-0012). Counts vmfault() (kernel/vm.c) outcomes for
+  // this process: pagefaults for a successful on-demand page-in
+  // (lazy-sbrk'd memory touched for the first time), pagefaults_failed
+  // for a recognized-but-unserviceable fault (address at/beyond p->sz,
+  // physical memory exhausted, or a permission violation on an
+  // already-mapped page -- see vm_permission_violation(),
+  // kernel/vm.c). Mutated only by vmfault() acting on
+  // myproc() -- i.e. only ever by the one hart currently running this
+  // exact process -- so, like trace_mask, this follows the lock-free
+  // "owner-only mutation" convention (ADR-0006 case (a)), even though,
+  // like sz/name (ADR-0009), it is read cross-process by xvstat(2)
+  // without a hard torn-read guarantee on the write side. That gap is
+  // deliberate, not an oversight: see
+  // docs/decisions/0012-pagefault-telemetry-locking.md for the
+  // specific lock-order hazard (kwait()'s copyout() running while
+  // holding the reaped child's p->lock) that rules out taking p->lock
+  // inside vmfault(). Reset to 0 on allocation and free; NOT inherited
+  // across fork() (like the Phase 2 counters -- a child's own fault
+  // history is its own).
+  uint64 pagefaults;
+  uint64 pagefaults_failed;
 };

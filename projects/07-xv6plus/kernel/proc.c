@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "defs.h"
 #include "pstat.h"
+#include "sched.h"
 
 struct cpu cpus[NCPU];
 
@@ -26,6 +27,25 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+
+// xv6-plus (Phase 4, FR5, ADR-0010): scheduler-experiment globals.
+// `sched_policy` selects which of schedule_roundrobin()/
+// schedule_lottery() every hart's scheduler() loop calls each time
+// around; `rng_state` is the lottery draw's PRNG state. Both are
+// protected by `sched_lock`, a new, deliberately leaf lock: it is
+// never held while any p->lock is held, and nothing reachable while
+// holding it ever acquires a p->lock, so it cannot introduce a cycle
+// with the existing wait_lock -> p->lock order (see
+// docs/decisions/0010-lottery-scheduler-design.md).
+struct spinlock sched_lock;
+int sched_policy = SCHED_RR;          // default: unchanged upstream behavior
+static uint32 rng_state;              // xorshift32 state; see lottery_rand()
+
+// Fixed, documented seed (not derived from `ticks`/boot entropy):
+// ADR-0004 requires the lottery draw to be reproducible so a measured
+// fairness result can be reproduced exactly, not just "randomized but
+// plausible."
+#define SCHED_RNG_SEED 2463534242u
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -52,6 +72,11 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
+  // xv6-plus (Phase 4, FR5, ADR-0010): scheduler-experiment lock and
+  // PRNG seed, initialized once at boot on hart 0 (procinit() itself
+  // only ever runs there -- see kernel/main.c).
+  initlock(&sched_lock, "sched");
+  rng_state = SCHED_RNG_SEED;
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -137,6 +162,16 @@ found:
   p->runticks = 0;
   p->waitticks = 0;
   p->syscall_count = 0;
+  // xv6-plus (Phase 4, FR5): fresh scheduler-experiment state for a
+  // freshly-allocated slot. tickets defaults to SCHED_DEFAULT_TICKETS
+  // (kernel/sched.h), not 0 -- see the field comment in kernel/proc.h
+  // for why a never-configured process still needs a normal share.
+  p->tickets = SCHED_DEFAULT_TICKETS;
+  p->sched_selections = 0;
+  // xv6-plus (Phase 5, FR6): fresh page-fault telemetry for a
+  // freshly-allocated slot. See kernel/proc.h and docs/vm-extension.md.
+  p->pagefaults = 0;
+  p->pagefaults_failed = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -192,6 +227,15 @@ freeproc(struct proc *p)
   p->runticks = 0;
   p->waitticks = 0;
   p->syscall_count = 0;
+  // xv6-plus (Phase 4, FR5): same rule for the scheduler-experiment
+  // fields -- a reused slot must never keep a previous occupant's
+  // ticket count or selection history. See
+  // tests/scheduler/test_tickets_lifecycle.py.
+  p->tickets = 0;
+  p->sched_selections = 0;
+  // xv6-plus (Phase 5, FR6): same rule for page-fault telemetry.
+  p->pagefaults = 0;
+  p->pagefaults_failed = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -314,6 +358,22 @@ kfork(void)
   // process's children are traced too, until they call trace() again
   // (e.g. trace(0) to opt out). See docs/tracing.md.
   np->trace_mask = p->trace_mask;
+
+  // xv6-plus (Phase 4, FR5): tickets are inherited across fork(),
+  // same rule and same reason as trace_mask just above -- a forked
+  // workload keeps its parent's configured scheduling share until it
+  // calls settickets() itself. No separate acquire needed: allocproc()
+  // already returned with np->lock held (see its own doc comment),
+  // and that same critical section is still open here (it isn't
+  // released until `release(&np->lock)` below) -- this write already
+  // has the same p->lock protection settickets()'s own write-side
+  // locking gives the field (ADR-0010), it just doesn't need a new
+  // acquire to get it.
+  np->tickets = p->tickets;
+  // np->sched_selections is already 0 from allocproc() above and
+  // stays that way here -- deliberately NOT inherited, same rule as
+  // the Phase 2 counters below (a child's own selection history
+  // starts at birth, not copied from the parent's).
 
   // xv6-plus (Phase 2, FR2): deliberately NOT inherited. np's
   // accounting counters are already 0 from allocproc() above and
@@ -448,17 +508,198 @@ kwait(uint64 addr)
   }
 }
 
+// xv6-plus (Phase 4, FR5, ADR-0010): switch proc p into RUNNING on
+// cpu c and run it until it swtch()es back here. Caller must hold
+// p->lock and have already confirmed p->state == RUNNABLE; this
+// helper flips the state, counts the selection, runs the process, and
+// leaves the lock held on return (matching upstream's existing
+// contract at every call site below -- the caller releases it).
+// Factored out of the two policies below purely to keep
+// sched_selections++ in exactly one place instead of two copies that
+// could drift.
+static void
+run_selected(struct cpu *c, struct proc *p)
+{
+  p->state = RUNNING;
+  p->sched_selections++;
+  c->proc = p;
+  swtch(&c->context, &p->context);
+  c->proc = 0;
+}
+
+// Baseline scheduling policy: unmodified upstream xv6 round-robin,
+// verbatim except for the run_selected() refactor above (which adds
+// the sched_selections++ instrumentation but changes no control
+// flow). One call scans the whole proc table once, in table order,
+// and runs every RUNNABLE process it finds for one quantum before
+// moving on. Returns 1 if at least one process ran, 0 if the table
+// held no RUNNABLE process this pass.
+static int
+schedule_roundrobin(struct cpu *c)
+{
+  struct proc *p;
+  int found = 0;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE) {
+      // Switch to chosen process.  It is the process's job
+      // to release its lock and then reacquire it
+      // before jumping back to us.
+      run_selected(c, p);
+      found = 1;
+    }
+    release(&p->lock);
+  }
+  return found;
+}
+
+// xv6-plus (Phase 4, FR5, ADR-0004/ADR-0010): xorshift32 PRNG, used
+// only by the lottery draw below. Not cryptographic -- a small, fast,
+// fixed-seed generator is exactly what a reproducible fairness
+// benchmark needs (ADR-0004). Caller must hold sched_lock.
+static uint32
+lottery_rand(void)
+{
+  rng_state ^= rng_state << 13;
+  rng_state ^= rng_state >> 17;
+  rng_state ^= rng_state << 5;
+  return rng_state;
+}
+
+// Sum p->tickets over every currently-RUNNABLE process, reading each
+// one under that process's own p->lock (ADR-0006 case (b): tickets is
+// cross-process-read here). NPROC is small (64), so one full-table
+// scan per draw is cheap.
+static uint64
+runnable_ticket_total(void)
+{
+  struct proc *p;
+  uint64 total = 0;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE)
+      total += p->tickets;
+    release(&p->lock);
+  }
+  return total;
+}
+
+// Deterministic fallback: run the first RUNNABLE process found, in
+// table order (i.e. behave like one round-robin step). Used when a
+// weighted draw has nothing to draw from (every RUNNABLE process
+// currently has 0 tickets -- see the zero-ticket-floor discussion in
+// docs/decisions/0010-lottery-scheduler-design.md) and as the
+// last-resort exit from schedule_lottery()'s bounded retry loop
+// below. This is what keeps invariant #4 ("the scheduler always
+// eventually selects eligible work") true even when the ticket-based
+// draw can't make a choice.
+static int
+pick_first_runnable(struct cpu *c)
+{
+  struct proc *p;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE) {
+      run_selected(c, p);
+      release(&p->lock);
+      return 1;
+    }
+    release(&p->lock);
+  }
+  return 0;
+}
+
+// One weighted draw against the RUNNABLE set, given its already-
+// computed ticket total: acquire sched_lock just long enough to draw
+// a winning ticket number, then walk the table again summing tickets
+// in the same order until the running sum passes the winner. Returns
+// 1 and has run the winner if the walk found it, 0 if it didn't (the
+// RUNNABLE set or a ticket count changed between the caller's total
+// and this walk -- a race, not an error; see schedule_lottery()).
+static int
+draw_and_run(struct cpu *c, uint64 total)
+{
+  struct proc *p;
+  uint64 winner, cum = 0;
+
+  acquire(&sched_lock);
+  winner = lottery_rand() % total;
+  release(&sched_lock);
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state == RUNNABLE) {
+      cum += p->tickets;
+      if(cum > winner) {
+        run_selected(c, p);
+        release(&p->lock);
+        return 1;
+      }
+    }
+    release(&p->lock);
+  }
+  return 0;
+}
+
+// xv6-plus (Phase 4, FR5, ADR-0004/ADR-0010): lottery scheduling.
+// Each call performs exactly one weighted draw and runs exactly one
+// process (unlike schedule_roundrobin(), which runs every RUNNABLE
+// process once per call) -- the standard shape for lottery scheduling
+// papers, and a natural fit here since scheduler() already calls
+// whichever policy function once per hart per re-entry.
+//
+// The two-pass design (sum tickets, then separately draw and walk
+// again) cannot hold one lock across both passes without either
+// acquiring every proc's lock at once (a new, much bigger lock-order
+// surface) or introducing a single new giant lock that would
+// serialize the whole table against every other p->lock use -- both
+// rejected as disproportionate for a teaching kernel. Instead the two
+// passes are allowed to race against a concurrent state change (a
+// process exiting or blocking between them), bounded by a small
+// retry loop: SCHED_LOTTERY_MAX_ATTEMPTS reflects how many times that
+// specific race can plausibly recur back-to-back, not a tuned
+// performance constant. See docs/decisions/0010-lottery-scheduler-design.md.
+#define SCHED_LOTTERY_MAX_ATTEMPTS 4
+
+static int
+schedule_lottery(struct cpu *c)
+{
+  for(int attempt = 0; attempt < SCHED_LOTTERY_MAX_ATTEMPTS; attempt++) {
+    uint64 total = runnable_ticket_total();
+    if(total == 0)
+      // No RUNNABLE process has a nonzero ticket count -- either
+      // there is no RUNNABLE process at all, or every RUNNABLE
+      // process currently has 0 tickets (e.g. a deliberately-starved
+      // test workload). Either way there is nothing to weight-draw
+      // from; fall back to picking the first RUNNABLE slot, exactly
+      // like round-robin would.
+      return pick_first_runnable(c);
+    if(draw_and_run(c, total))
+      return 1;
+    // The draw missed (a race between the two passes); retry against
+    // current state rather than reporting found=0 to scheduler()'s
+    // wfi check below, which would incorrectly suspend this hart even
+    // though RUNNABLE work still exists.
+  }
+  // Exhausted the retry budget (would require a fresh race on every
+  // single attempt) -- fall back to a deterministic pick so
+  // invariant #4 holds unconditionally, not just in the common case.
+  return pick_first_runnable(c);
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
-//  - choose a process to run.
+//  - choose a process to run (per the current sched_policy).
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
 
   c->proc = 0;
@@ -471,24 +712,18 @@ scheduler(void)
     intr_on();
     intr_off();
 
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    // xv6-plus (Phase 4, FR5): sched_policy is read here without
+    // sched_lock -- a plain, naturally-aligned int read/write, same
+    // "best-effort, not safety-critical" reasoning ADR-0009 already
+    // applies to `ticks`: a policy switch (schedpolicy(2)) becoming
+    // visible to this hart one iteration later than another is
+    // acceptable for a scheduling *policy* knob (invariant #8 asks
+    // that observability/extension code not destabilize the kernel,
+    // not that a config change be instantaneous across all harts).
+    int found = (sched_policy == SCHED_LOTTERY)
+                  ? schedule_lottery(c)
+                  : schedule_roundrobin(c);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
-      release(&p->lock);
-    }
     if(found == 0) {
       // nothing to run; stop running on this core until an interrupt.
       asm volatile("wfi");
@@ -761,9 +996,80 @@ procstat(int idx, struct xv_pstat *out)
   out->waitticks = p->waitticks;
   out->syscalls = p->syscall_count;
   safestrcpy(out->name, p->name, sizeof(out->name));
+  // xv6-plus (Phase 4, FR5): tickets/selections. tickets is written
+  // under p->lock by sched_settickets() below, so it gets the same
+  // hard guarantee as runticks/waitticks/syscall_count; selections is
+  // written under p->lock by run_selected() (this same file), same
+  // guarantee.
+  out->tickets = p->tickets;
+  out->selections = p->sched_selections;
+  // xv6-plus (Phase 5, FR6): pagefaults/pagefaults_failed. Read in
+  // this same critical section but do NOT carry that hard guarantee
+  // -- vmfault() (kernel/vm.c) deliberately writes them without
+  // p->lock (docs/decisions/0012-pagefault-telemetry-locking.md), so
+  // this is the same best-effort staleness class as sz/name above.
+  out->pagefaults = p->pagefaults;
+  out->pagefaults_failed = p->pagefaults_failed;
   release(&p->lock);
 
   return 0;
+}
+
+// xv6-plus (Phase 4, FR5, ADR-0010): set myproc()'s own ticket count.
+// Rejects n < 0 (negative tickets have no meaning for a weighted
+// draw) and returns -1 without changing anything; n == 0 is
+// deliberately allowed (a process can be configured to only ever run
+// via the zero-ticket floor -- see schedule_lottery()'s
+// pick_first_runnable() fallback -- which is exactly how
+// tests/scheduler/test_lottery_zero_ticket_floor.py exercises
+// invariant #4's starvation bound). Also rejects n > SCHED_MAX_TICKETS
+// (kernel/sched.h) -- without this bound, a large enough sum of
+// RUNNABLE tickets would truncate through draw_and_run()'s uint32 PRNG
+// modulo and make some processes structurally unreachable by any draw;
+// see kernel/sched.h's comment on SCHED_MAX_TICKETS and
+// docs/decisions/0013-ticket-count-bound.md. Takes p->lock on write
+// because, unlike trace_mask, tickets is read cross-process by the
+// lottery scheduler as a real scheduling input (ADR-0006 case (b));
+// see the field comment in kernel/proc.h.
+int
+sched_settickets(int n)
+{
+  struct proc *p = myproc();
+
+  if(n < 0 || n > SCHED_MAX_TICKETS)
+    return -1;
+
+  acquire(&p->lock);
+  p->tickets = n;
+  release(&p->lock);
+  return 0;
+}
+
+// xv6-plus (Phase 4, FR5, ADR-0010): set the global scheduling policy
+// for every hart's scheduler() loop. Rejects anything other than
+// SCHED_RR/SCHED_LOTTERY (kernel/sched.h) and leaves sched_policy
+// unchanged in that case -- deliberately, so a bad argument can never
+// leave the scheduler dispatch in scheduler() looking at a value
+// neither schedule_roundrobin() nor schedule_lottery() was written
+// for (invariant #4). No process-identity check: this is a teaching
+// kernel (spec Â§1.6 non-goal: production-grade security), and every
+// other control syscall in this codebase (trace(), settickets() above)
+// is equally unrestricted. Returns the *previous* policy on success,
+// so a benchmark harness can restore it afterwards (see
+// user/schedbench.c), or -1 if policy was invalid.
+int
+sched_setpolicy(int policy)
+{
+  int prev;
+
+  if(policy != SCHED_RR && policy != SCHED_LOTTERY)
+    return -1;
+
+  acquire(&sched_lock);
+  prev = sched_policy;
+  sched_policy = policy;
+  release(&sched_lock);
+  return prev;
 }
 
 // Print a process listing to console.  For debugging.

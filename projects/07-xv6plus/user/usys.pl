@@ -44,3 +44,5 @@ entry("pause");
 entry("uptime");
 entry("trace");
 entry("xvstat");
+entry("settickets");
+entry("schedpolicy");

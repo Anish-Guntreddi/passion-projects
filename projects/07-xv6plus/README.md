@@ -5,7 +5,7 @@ RISC-V teaching kernel. Portfolio project 07 of 09 (Track D: OS,
 independent of the other projects). Full spec: `07-xv6plus-spec.md`
 (portfolio repo root).
 
-**Status: Phases 0-3 of 9 complete.** This is *not* a finished
+**Status: Phases 0-5 of 9 complete.** This is *not* a finished
 project -- see "Roadmap status" below. Everything claimed here is
 backed by a real, reproducible build and test run in this repo; see
 "Verify it yourself."
@@ -100,10 +100,69 @@ genuine zombie process deterministically and confirms it never appears
 as a row. Full design writeup and example transcript:
 [`docs/xvtop.md`](docs/xvtop.md).
 
-Not yet built: a scheduler experiment (Phase 4), a VM extension
-(Phase 5), stress hardening (Phase 6), an observability report (Phase
-7), or portfolio polish (Phase 8). The resume narrative in the spec
-(§1.7) describes the *finished* project and is not claimed here yet.
+### FR5: Lottery scheduler experiment (Phase 4)
+
+A second scheduling policy, lottery scheduling, selectable at runtime
+alongside the unmodified upstream round-robin baseline via a new
+`schedpolicy(policy)` syscall -- not a replacement of it. Each process
+gets a configurable ticket count (`settickets(n)`, capped at
+`SCHED_MAX_TICKETS` to keep the weighted draw's PRNG modulo from
+truncating, [ADR-0013](docs/decisions/0013-ticket-count-bound.md);
+inherited across `fork()` like `trace()`'s mask); under lottery
+scheduling, every scheduling decision is a weighted random draw
+(fixed-seed xorshift32, reproducible by design) over the
+currently-runnable set. A process configured with 0 tickets can only
+ever run via a deterministic fallback that fires when the whole
+`RUNNABLE` set's ticket total hits 0 -- this keeps the *scheduler*
+from ever stalling on `RUNNABLE` work (invariant #4), but is not a
+guarantee that a 0-ticket process gets scheduled while a nonzero-
+ticket competitor stays continuously `RUNNABLE` (see
+`docs/scheduler.md`'s "Zero-ticket floor" section for the precise,
+corrected statement). Full design writeup, PRNG/locking rationale, and
+a captured benchmark comparing the two policies head-to-head on the
+same unequal-ticket workload: [`docs/scheduler.md`](docs/scheduler.md).
+
+```
+=== baseline (SCHED_RR), tickets 60:20:10:5:60:20:10 ===
+runticks: 14 11 12 12 13 13 13        <- roughly equal regardless of tickets
+
+=== lottery (SCHED_LOTTERY), same tickets ===
+runticks: 22 17 6 5 22 6 10           <- tracks ticket share (by tier average)
+```
+
+(Real transcript from this repo's own build, regenerated directly from
+[`benchmarks/raw/scheduler/`](benchmarks/raw/scheduler/) during review
+followup -- an earlier hand-typed version of this transcript did not
+match those raw files and has been corrected; see
+[`benchmarks/methodology.md`](benchmarks/methodology.md) for the full
+run and per-tier analysis, independently re-verified line-by-line
+against the raw files and correct throughout.)
+
+### FR6: VM extension -- page-fault telemetry (Phase 5)
+
+Per-process counters (`pagefaults`, `pagefaults_failed`) for the
+already-upstream lazy-allocation fault path (`sys_sbrk(n,
+SBRK_LAZY)`/`vmfault()`), exposed through the existing `xvstat(2)`
+interface -- **no new syscall**. This is a deliberately narrow
+originality claim: the fault-in mechanism itself predates this
+project (see the honesty-layer note in
+[`docs/vm-extension.md`](docs/vm-extension.md) and
+[ADR-0011](docs/decisions/0011-vm-extension-choice.md)); what's
+original is the telemetry, a `kernel/trap.c` diagnostic that
+distinguishes an out-of-bounds/out-of-memory failure from a genuine
+permission violation (e.g. a write to a process's own read-only text
+segment -- `vm_permission_violation()`, added during review followup),
+and seven dedicated correctness test programs covering invalid
+addresses, permission violations, fork/exec interactions, real memory
+exhaustion + reclaim-on-exit, and a direct (not just inferred)
+`pagefaults_failed` counter read -- test coverage invariant #6 (VM
+isolation) had *none* of before this phase. Full design writeup and
+captured real transcripts: [`docs/vm-extension.md`](docs/vm-extension.md).
+
+Not yet built: stress hardening (Phase 6), an observability report
+(Phase 7), or portfolio polish (Phase 8). The resume narrative in the
+spec (§1.7) describes the *finished* project and is not claimed here
+yet.
 
 ## Roadmap status
 
@@ -113,8 +172,8 @@ Not yet built: a scheduler experiment (Phase 4), a VM extension
 | 1 | Syscall tracing foundation | Per-process tracing works without breaking normal execution | **Done** |
 | 2 | Process accounting | Tests verify fork/exec/exit behavior and counter monotonicity where appropriate | **Done** |
 | 3 | `xvtop` | Tool visibly reports active processes and resource data | **Done** |
-| 4 | Scheduler experiment | -- | Not started |
-| 5 | VM extension | -- | Not started |
+| 4 | Scheduler experiment | Benchmark compares fairness/turnaround/response vs baseline scheduler | **Done** |
+| 5 | VM extension | Dedicated VM tests + architecture note | **Done** |
 | 6 | Stress/race hardening | -- | Not started |
 | 7 | Kernel observability report | -- | Not started |
 | 8 | Portfolio hardening | -- | Not started |
@@ -124,10 +183,12 @@ Not yet built: a scheduler experiment (Phase 4), a VM extension
 ```
 kernel/, user/, mkfs/, Makefile, README, LICENSE.upstream-xv6   vendored upstream (A) + inline original (C) changes
 docs/upstream-delta.md      full A/B/C file-by-file breakdown
-docs/decisions/              ADRs for every spec open decision (D1-D7) + ADR-0008 (VCS adaptation) + ADR-0009 (Phase 2 locking follow-up)
+docs/decisions/              ADRs for every spec open decision (D1-D7) + ADR-0008 (VCS adaptation) + ADR-0009/0010/0012 (locking/design follow-ups) + ADR-0011 (D5 finalized) + ADR-0013 (ticket-count bound, review-fix followup)
 docs/tracing.md              Phase 1 design writeup
 docs/accounting.md           Phase 2 design writeup
 docs/xvtop.md                Phase 3 design writeup
+docs/scheduler.md            Phase 4 design writeup
+docs/vm-extension.md         Phase 5 design writeup
 docs/invariants.md           the 8 core invariants (spec §1.5) and their status per phase
 docs/toolchain.md            verified toolchain versions, build/debug/test workflow
 scripts/run-tests.sh         build + run the full suite (thin wrapper)
@@ -136,7 +197,10 @@ scripts/qemu_session.py      QEMU serial-console driver used by the harness and 
 tests/syscall/                Phase 1 tracing tests
 tests/accounting/             Phase 2 process-accounting tests
 tests/xvtop/                  Phase 3 xvtop tests
-tests/scheduler/, tests/vm/, tests/stress/   reserved for later phases (see per-directory README.md)
+tests/scheduler/              Phase 4 scheduler-experiment tests
+tests/vm/                     Phase 5 VM-extension tests
+tests/stress/                 reserved for Phase 6 (see tests/stress/README.md)
+benchmarks/raw/, benchmarks/methodology.md   Phase 4 scheduler-fairness benchmark: raw captured output + analysis
 ```
 
 ## Verify it yourself
@@ -168,6 +232,18 @@ kernel/kernel fs.img`, then the full suite):
 [test] tests/accounting/test_waitticks_from_pause.py: PASS
 [test] tests/accounting/test_xvstat_bounds.py ...
 [test] tests/accounting/test_xvstat_bounds.py: PASS
+[test] tests/scheduler/test_lottery_zero_ticket_floor.py ...
+[test] tests/scheduler/test_lottery_zero_ticket_floor.py: PASS
+[test] tests/scheduler/test_sched_baseline_fairness.py ...
+[test] tests/scheduler/test_sched_baseline_fairness.py: PASS
+[test] tests/scheduler/test_sched_lottery_fairness.py ...
+[test] tests/scheduler/test_sched_lottery_fairness.py: PASS
+[test] tests/scheduler/test_schedpolicy_validation.py ...
+[test] tests/scheduler/test_schedpolicy_validation.py: PASS
+[test] tests/scheduler/test_settickets_validation.py ...
+[test] tests/scheduler/test_settickets_validation.py: PASS
+[test] tests/scheduler/test_tickets_lifecycle.py ...
+[test] tests/scheduler/test_tickets_lifecycle.py: PASS
 [test] tests/syscall/test_no_regression.py ...
 [test] tests/syscall/test_no_regression.py: PASS
 [test] tests/syscall/test_trace_basic.py ...
@@ -178,13 +254,27 @@ kernel/kernel fs.img`, then the full suite):
 [test] tests/syscall/test_trace_isolation.py: PASS
 [test] tests/syscall/test_trace_toggle.py ...
 [test] tests/syscall/test_trace_toggle.py: PASS
+[test] tests/vm/test_exec_discards_lazy_region.py ...
+[test] tests/vm/test_exec_discards_lazy_region.py: PASS
+[test] tests/vm/test_fork_lazy_region.py ...
+[test] tests/vm/test_fork_lazy_region.py: PASS
+[test] tests/vm/test_memory_exhaustion_recovery.py ...
+[test] tests/vm/test_memory_exhaustion_recovery.py: PASS
+[test] tests/vm/test_oob_access_killed.py ...
+[test] tests/vm/test_oob_access_killed.py: PASS
+[test] tests/vm/test_pagefault_counting.py ...
+[test] tests/vm/test_pagefault_counting.py: PASS
+[test] tests/vm/test_pagefault_failed_counted.py ...
+[test] tests/vm/test_pagefault_failed_counted.py: PASS
+[test] tests/vm/test_permission_fault_killed.py ...
+[test] tests/vm/test_permission_fault_killed.py: PASS
 [test] tests/xvtop/test_xvtop_basic.py ...
 [test] tests/xvtop/test_xvtop_basic.py: PASS
 [test] tests/xvtop/test_xvtop_zombie_filtered.py ...
 [test] tests/xvtop/test_xvtop_zombie_filtered.py: PASS
 
 ============================================================
-xv6-plus test summary: 14/14 passed in 5.9s
+xv6-plus test summary: 27/27 passed in 19.4s
   [PASS] boot smoke test
   [PASS] tests/accounting/test_exec_preserves_counters.py
   [PASS] tests/accounting/test_fork_fresh_counters.py
@@ -192,11 +282,24 @@ xv6-plus test summary: 14/14 passed in 5.9s
   [PASS] tests/accounting/test_syscall_count_monotonic.py
   [PASS] tests/accounting/test_waitticks_from_pause.py
   [PASS] tests/accounting/test_xvstat_bounds.py
+  [PASS] tests/scheduler/test_lottery_zero_ticket_floor.py
+  [PASS] tests/scheduler/test_sched_baseline_fairness.py
+  [PASS] tests/scheduler/test_sched_lottery_fairness.py
+  [PASS] tests/scheduler/test_schedpolicy_validation.py
+  [PASS] tests/scheduler/test_settickets_validation.py
+  [PASS] tests/scheduler/test_tickets_lifecycle.py
   [PASS] tests/syscall/test_no_regression.py
   [PASS] tests/syscall/test_trace_basic.py
   [PASS] tests/syscall/test_trace_fork_inheritance.py
   [PASS] tests/syscall/test_trace_isolation.py
   [PASS] tests/syscall/test_trace_toggle.py
+  [PASS] tests/vm/test_exec_discards_lazy_region.py
+  [PASS] tests/vm/test_fork_lazy_region.py
+  [PASS] tests/vm/test_memory_exhaustion_recovery.py
+  [PASS] tests/vm/test_oob_access_killed.py
+  [PASS] tests/vm/test_pagefault_counting.py
+  [PASS] tests/vm/test_pagefault_failed_counted.py
+  [PASS] tests/vm/test_permission_fault_killed.py
   [PASS] tests/xvtop/test_xvtop_basic.py
   [PASS] tests/xvtop/test_xvtop_zombie_filtered.py
 ============================================================
@@ -205,9 +308,15 @@ xv6-plus test summary: 14/14 passed in 5.9s
 Also verified manually against upstream's own `usertests` regression
 suite (not part of the automated harness above -- it takes several
 minutes and is a stock upstream program, not an xv6-plus feature under
-test): `usertests` reports `ALL TESTS PASSED` against this tree, with
-the Phase 2 accounting fields and their `p->lock` discipline live on
-every process throughout.
+test): `usertests` reports `ALL TESTS PASSED` against this tree in
+223.5s (re-run against this exact tree during review followup, after
+the `MAXVAplus` regression fix below -- runtime varies a little
+run-to-run with host/QEMU load, an earlier run of the pre-followup
+tree measured 198.7s), with all seven Phase 2/4/5 telemetry fields and
+their locking live on every process throughout, and (Phase 5)
+`usertests`' own `lazytests` group exercising the exact `vmfault()`
+memory-exhaustion
+path this project instruments and hardened the diagnostics for.
 
 To boot interactively instead: `make qemu` (quit with the QEMU
 monitor escape, Ctrl-A x). To debug with gdb: `make qemu-gdb` in one
@@ -215,11 +324,22 @@ terminal, `riscv64-unknown-elf-gdb -x .gdbinit` in another.
 
 ## Design decisions
 
-Every spec open decision (D1-D7) has a recorded ADR under
-[`docs/decisions/`](docs/decisions/), including the ones deferred to
-later phases (D5, VM extension choice) and the one open-decision
-process itself had to adapt to this repo's monorepo + no-git-commands
-constraints (ADR-0008). ADR-0009 is a Phase 2 follow-up to D6/ADR-0006,
-settling the specific cross-process-read locking case (and a
-`tickslock`-reuse hazard) that arose implementing the accounting
-counters.
+Every spec open decision (D1-D7) now has a recorded, **implemented**
+ADR under [`docs/decisions/`](docs/decisions/) -- including D5 (VM
+extension choice), originally deferred (ADR-0005) pending human input
+that never became available mid-build, and finalized in Phase 5
+(ADR-0011: page-fault telemetry) the same way D1/D2 were resolved by
+implementer default in Phase 0 (ADR-0001/0002) -- plus the one
+open-decision process itself had to adapt to this repo's monorepo +
+no-git-commands constraints (ADR-0008). Three follow-up ADRs settle
+implementation questions the original decisions deliberately deferred
+until each feature was actually built: ADR-0009 (Phase 2, the
+`syscall_count`/`runticks`/`waitticks` cross-process locking case and
+a `tickslock`-reuse hazard that was found and rejected), ADR-0010
+(Phase 4, the lottery scheduler's PRNG/two-pass-draw/tickets-lifecycle
+design), and ADR-0012 (Phase 5, a second lock-order hazard found and
+rejected -- this time in `vmfault()` against `kwait()`'s `copyout()`).
+A fourth, ADR-0013, was added during an external review-fix followup
+pass (not from a fresh spec decision): the `settickets(2)`
+ticket-count upper bound that keeps the lottery draw's PRNG modulo
+from truncating a large `RUNNABLE` ticket total.

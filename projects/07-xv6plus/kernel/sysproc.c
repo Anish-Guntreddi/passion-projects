@@ -139,6 +139,29 @@ sys_trace(void)
 // Returns 0 and fills *addr on success, -1 if idx is out of
 // [0, NPROC) range or the copyout itself fails (e.g. addr not
 // mapped/writable in the caller's page table).
+// xv6-plus: FR5 scheduler-experiment control (Phase 4). Thin wrapper
+// per the handoff brief's "syscalls kept small" rule -- all the
+// validation and locking lives in sched_settickets() (kernel/proc.c).
+uint64
+sys_settickets(void)
+{
+  int n;
+
+  argint(0, &n);
+  return sched_settickets(n);
+}
+
+// xv6-plus: FR5 scheduler-experiment control (Phase 4). Thin wrapper;
+// see sched_setpolicy() (kernel/proc.c) for validation/locking.
+uint64
+sys_schedpolicy(void)
+{
+  int policy;
+
+  argint(0, &policy);
+  return sched_setpolicy(policy);
+}
+
 uint64
 sys_xvstat(void)
 {

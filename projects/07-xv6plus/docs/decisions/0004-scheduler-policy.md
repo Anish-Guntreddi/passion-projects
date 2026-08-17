@@ -1,6 +1,9 @@
 # ADR-0004: Scheduler experiment is lottery scheduling
 
-**Status:** Accepted (spec default); implementation deferred to Phase 4
+**Status:** Accepted; implemented in Phase 4. See
+[ADR-0010](0010-lottery-scheduler-design.md) for the implementation
+decisions (PRNG, two-pass draw, tickets lifecycle, zero-ticket floor)
+this ADR deferred below.
 **Decision:** D4 (spec §1.10)
 **Date:** 2026-08-17 (recorded ahead of implementation; see ADR-0003)
 

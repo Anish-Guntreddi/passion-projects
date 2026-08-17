@@ -1,5 +1,10 @@
-// xv6-plus (Phase 2/3): shared helper for the accounting test
-// programs (tests/accounting/, tests/xvtop/) and xvtop itself.
+// xv6-plus (Phase 2/3, reused by Phase 4/5): shared helper for the
+// accounting test programs (tests/accounting/, tests/xvtop/), xvtop
+// itself, and the Phase 4/5 scheduler-experiment and page-fault-
+// telemetry programs (user/schedbench.c, user/vm*.c) -- xv_pstat
+// grew tickets/selections/pagefaults/pagefaults_failed fields in
+// those later phases (kernel/pstat.h), but this scan-for-my-own-pid
+// helper needed no changes to keep working for all of them.
 //
 // xvstat(2) is index-based, not pid-based (see kernel/pstat.h and
 // docs/accounting.md) -- exactly the same shape as a real process

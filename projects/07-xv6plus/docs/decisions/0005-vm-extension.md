@@ -1,6 +1,10 @@
 # ADR-0005: VM extension choice -- deferred
 
-**Status:** Open (deferred to Phase 5, human input requested)
+**Status:** Superseded by
+[ADR-0011](0011-vm-extension-choice.md) -- decided (page-fault
+telemetry, option 2 below) and implemented in Phase 5, no human input
+having become available mid-build. Kept as-is for the historical
+record: the candidate list below is exactly what ADR-0011 chose from.
 **Decision:** D5 (spec §1.10)
 **Date:** 2026-08-17
 
