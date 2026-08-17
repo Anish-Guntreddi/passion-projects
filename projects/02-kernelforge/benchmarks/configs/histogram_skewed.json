@@ -1,0 +1,12 @@
+{
+  "kernel_family": "histogram",
+  "binary": "bench_histogram",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v1_global_atomic", "v2_privatized", "v3_privatized_coarsened"],
+  "sweep_param": "n",
+  "sweep_values": [65536, 524288, 2097152, 8388608, 33554432],
+  "fixed_args": { "num-bins": 256, "block-size": 256, "coarsen": 8, "contention": "skewed" },
+  "notes": "HIGH-contention half of the Phase 3 lab: values = uniform^24, concentrating the large majority of elements into a handful of bins (kernelforge::ContentionProfile::kSkewed). Identical sweep to histogram_uniform.json (same n values, num_bins, block_size, seed) except this one field -- see src/kernels/histogram/README.md."
+}

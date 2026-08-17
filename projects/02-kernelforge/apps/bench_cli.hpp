@@ -22,11 +22,15 @@ constexpr int kMinMeasuredReps = 20;
 struct CliArgs {
   std::string variant = "v1_naive";
   long long n = -1;      // vector_add / saxpy: vector length. transpose: square dim (rows=cols).
+                          // reduction/scan: array length. histogram: input length.
   int stride = -1;       // stride_copy only.
   int warmup_iters = 10; // ADR 0005 default.
   int measured_reps = 30; // ADR 0005 default (>= 20).
   std::uint64_t seed = 123456789ULL; // kernelforge::kDefaultSeed
   int block_size = 256;
+  int num_bins = 256;             // histogram only.
+  std::string contention = "uniform"; // histogram only: "uniform" | "skewed" (Phase 3, ADR 0011).
+  int coarsen = 8;                // histogram v3_privatized_coarsened only: elements/thread.
 };
 
 inline CliArgs parse_cli(int argc, char** argv) {
@@ -68,6 +72,15 @@ inline CliArgs parse_cli(int argc, char** argv) {
     } else if (auto v = next_value("--block-size")) {
       args.block_size = std::atoi(v->c_str());
       consume_if_separate("--block-size");
+    } else if (auto v = next_value("--num-bins")) {
+      args.num_bins = std::atoi(v->c_str());
+      consume_if_separate("--num-bins");
+    } else if (auto v = next_value("--contention")) {
+      args.contention = *v;
+      consume_if_separate("--contention");
+    } else if (auto v = next_value("--coarsen")) {
+      args.coarsen = std::atoi(v->c_str());
+      consume_if_separate("--coarsen");
     }
   }
   return args;

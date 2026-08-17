@@ -58,7 +58,9 @@ struct EnvironmentInfo {
 struct BenchResult {
   std::string schema_version = "1.0";
 
-  std::string kernel_family; // "vector_add" | "saxpy" | "transpose" | "stride_copy"
+  // "vector_add" | "saxpy" | "transpose" | "stride_copy" | "reduction" |
+  // "scan" | "histogram" (Phase 2/3 families added by ADR 0011).
+  std::string kernel_family;
   std::string variant;       // "v1_naive" | "v2_tiled" | ...
   std::string description;
 
@@ -68,6 +70,8 @@ struct BenchResult {
   int rows = 0;       // transpose only, 0 otherwise
   int cols = 0;       // transpose only, 0 otherwise
   int stride = 0;      // stride_copy only, 0 otherwise
+  int num_bins = 0;           // histogram only, 0 otherwise (ADR 0011)
+  std::string contention_profile; // histogram only: "uniform" | "skewed"; empty otherwise (ADR 0011)
   std::string dtype = "fp32";
 
   int block_dim_x = 0, block_dim_y = 0, block_dim_z = 1;

@@ -1,0 +1,12 @@
+{
+  "kernel_family": "reduction",
+  "binary": "bench_reduction",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["v0_naive_global_atomic", "v1_naive_interleaved", "v2_sequential_addressing", "v3_warp_shuffle", "v4_vectorized_coarsened"],
+  "sweep_param": "n",
+  "sweep_values": [4096, 65536, 1048576, 4194304, 16777216, 67108864],
+  "fixed_args": { "block-size": 256 },
+  "notes": "Non-negative [0,1) input (see kernelforge::reference::reduce_sum's double-accumulation rationale). Same sizes/seed for all five variants so they are directly comparable -- see src/kernels/reduction/README.md for what each rung changes. v0_naive_global_atomic was added after v1-v4's numbers were already collected (see that README's 'Ladder history' note); its numbers land in benchmarks/raw/reduction.jsonl on the next benchmark-collection pass, per hard constraint 9 (separate implementation from benchmark-result commits)."
+}

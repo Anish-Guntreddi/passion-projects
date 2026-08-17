@@ -38,4 +38,29 @@ inline void validate_block_size_1d(int block_size, const char* launcher_name) {
   }
 }
 
+// Phase 2 (reduction/scan): the shared-memory tree-based addressing
+// patterns used by every reduction/scan kernel (sequential-addressing
+// halving loops, the Blelloch up-sweep/down-sweep index formula) assume
+// blockDim.x is a power of two -- a non-power-of-two block size would
+// silently leave some elements unreduced rather than failing loudly. The
+// warp-shuffle finalization step additionally assumes at least one full
+// warp (32 threads) is present. kMinPow2BlockSize is that floor.
+constexpr int kMinPow2BlockSize = 32;
+
+inline bool is_power_of_two(int x) { return x > 0 && (x & (x - 1)) == 0; }
+
+// Throws std::invalid_argument unless block_size is a power of two in
+// [kMinPow2BlockSize, kMaxThreadsPerBlock1D].
+inline void validate_block_size_pow2_1d(int block_size, const char* launcher_name) {
+  if (block_size < kMinPow2BlockSize || block_size > kMaxThreadsPerBlock1D ||
+      !is_power_of_two(block_size)) {
+    throw std::invalid_argument(
+        std::string(launcher_name) + ": block_size (" + std::to_string(block_size) +
+        ") must be a power of two in [" + std::to_string(kMinPow2BlockSize) + ", " +
+        std::to_string(kMaxThreadsPerBlock1D) +
+        "] (required by the tree-based reduction/scan addressing pattern and the "
+        "warp-shuffle finalization step).");
+  }
+}
+
 } // namespace kernelforge

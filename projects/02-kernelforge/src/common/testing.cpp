@@ -34,9 +34,9 @@ int run_all(int argc, char** argv) {
     } catch (const FatalTestFailure&) {
       fatal = true;
     } catch (const std::exception& e) {
-      current_failures().push_back(std::string("uncaught exception: ") + e.what());
+      record_failure(std::string("uncaught exception: ") + e.what());
     } catch (...) {
-      current_failures().push_back("uncaught non-std::exception");
+      record_failure("uncaught non-std::exception");
     }
 
     if (current_failures().empty()) {

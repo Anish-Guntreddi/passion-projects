@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs every Phase 0/1 benchmark sweep and appends results to
+# Runs every Phase 0/1/2/3 benchmark sweep and appends results to
 # benchmarks/raw/. Separate from scripts/build.sh/test.sh on purpose
 # (hard constraint 9: "separate implementation commits from benchmark-
 # result commits" -- this script is the one that produces the artifacts
@@ -14,10 +14,13 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 "${ROOT_DIR}/scripts/run_bench_saxpy.sh"
 "${ROOT_DIR}/scripts/run_bench_transpose.sh"
 "${ROOT_DIR}/scripts/run_bench_stride.sh"
+"${ROOT_DIR}/scripts/run_bench_reduction.sh"
+"${ROOT_DIR}/scripts/run_bench_scan.sh"
+"${ROOT_DIR}/scripts/run_bench_histogram.sh"
 
 python3 "${ROOT_DIR}/scripts/validate_results.py" \
   "${ROOT_DIR}/benchmarks/raw" \
   "${ROOT_DIR}/benchmarks/schema/bench_result.schema.json"
 
 echo ""
-echo "All Phase 0/1 benchmarks complete. Raw results under benchmarks/raw/."
+echo "All Phase 0/1/2/3 benchmarks complete. Raw results under benchmarks/raw/."

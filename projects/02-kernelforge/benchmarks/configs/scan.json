@@ -1,0 +1,12 @@
+{
+  "kernel_family": "scan",
+  "binary": "bench_scan",
+  "seed": 123456789,
+  "warmup_iters": 10,
+  "measured_reps": 30,
+  "variants": ["hillis_steele", "blelloch"],
+  "sweep_param": "n",
+  "sweep_values": [1024, 16384, 65536, 262144, 1048576],
+  "fixed_args": { "block-size": 1024 },
+  "notes": "block-size=1024 -> this 2-level scan's supported ceiling is block_size^2 = 1,048,576 elements (see kernels/scan/scan_common.cuh); every sweep value here stays at or under that ceiling. Same sizes/seed for both strategies -- see src/kernels/scan/README.md."
+}
