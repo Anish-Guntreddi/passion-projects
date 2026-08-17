@@ -12,14 +12,14 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 
 | Project | Wave | Current phase | Status | Notes |
 |---|---|---|---|---|
-| 01 ForgeLM | 1 | 0–1 | in-progress (wf_2d7c2ef0) | Python/PyTorch; CPU tests, GPU runs |
+| 01 ForgeLM | 1 | 2–3 | 0–1 DONE (91/91 tests, committed 5e0ef7c) · 2–3 in wf_c60f9aab | Transformer + training system next |
 | 02 KernelForge | 1b | 2–3 | phases 0–1 DONE (57/57 tests, sanitizer clean, artifacts committed 289480c/84a7308) | reduction/scan + atomics next |
-| 03 MiniPaged | 2 | — | waiting (ForgeLM) | |
+| 03 MiniPaged | 2 | 0–1 | in-progress (wf_c60f9aab) | started early — dep was pedagogical, not code |
 | 04 FlashLite | 2 | — | waiting (KernelForge) | |
-| 05 ArcServe | 1 | 0–1 | in-progress (wf_2d7c2ef0) | epoll → WSL |
-| 06 PebbleDB | 2 | — | waiting (ArcServe soft-dep) | |
-| 07 xv6-plus | 1 | 0–1 | in-progress (wf_2d7c2ef0) | QEMU RISC-V in WSL |
-| 08 ReleaseGuard | 1 | 0–1 | in-progress (wf_2d7c2ef0) | Go + kind |
+| 05 ArcServe | 1 | 2–3 | 0–1 DONE (77 tests × 4 sanitizers, a1baf98) · 2–3 in wf_c60f9aab | epoll reactor + parser next |
+| 06 PebbleDB | 2 | 0–1 | in-progress (wf_c60f9aab) | modeled on ArcServe build layout |
+| 07 xv6-plus | 1 | 2–3 | 0–1 DONE (verifier PASS, b8f916e) · 2–3 in wf_c60f9aab | accounting + xvtop next |
+| 08 ReleaseGuard | 1 | 2–3 | 0–1 DONE (race-clean, live kind, c15d36f) · 2–3 in wf_c60f9aab | telemetry + manual canary next |
 | 09 Helios | 3 | — | waiting (capstone) | must be last |
 | Showcase site | 4 | — | waiting (all) | GitHub Pages |
 
@@ -44,4 +44,6 @@ RTX 4090 24GB (visible in WSL2) · WSL2 Ubuntu 24.04 · Docker 28.4 · Codex CLI
 
 - **2026-08-17 · Monorepo layout** — all projects under `projects/<nn-name>/`; showcase site deploys from this repo. Splittable later.
 - **2026-08-17 · Spec open-decisions** — adopt each spec's recommended default; ADR it in the project; conservative compute budgets where specs say "human decision".
-- **2026-08-17 · Codex lanes** — reviewer lane (`codex exec -s read-only`, effort=high) on every increment; offload lane (`--full-auto`) for mechanical tasks (CI YAML, plotting scripts, doc polish).
+- **2026-08-17 · Codex lanes** — reviewer lane (`codex exec -s read-only`, effort=high) on every increment; offload lane for mechanical tasks. NOTE: Codex on Windows cannot write (sandbox hard-falls to read-only); offload pattern = Codex drafts content, orchestrator reviews and applies. Caught a real bug in Codex's draft this way (`--index-url` vs `--extra-index-url`).
+- **2026-08-17 · CI at root** — per-project workflows at `.github/workflows/ci-<name>.yml` with paths filters; KernelForge compile-only (no GPU runners); pushed 25f749f.
+- **2026-08-17 · MiniPaged/PebbleDB started early** — their "dependencies" were pedagogical (human learning order), not code interfaces; parallel agents don't need them.
