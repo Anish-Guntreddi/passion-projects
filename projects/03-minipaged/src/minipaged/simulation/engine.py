@@ -43,6 +43,28 @@ Two more things worth stating plainly since they are easy to get wrong:
   (which use ``now`` directly) -- so newly admitted sequences are instead
   explicitly excluded from this tick's decode pass via a skip set, rather
   than achieved by reordering the two phases.
+
+Phase 2/3 extension points (added alongside the paged allocator and
+scheduler, not by rewriting this loop -- see ``kv/manager.py`` and
+``scheduler/scheduler.py``):
+
+* ``_can_decode(seq)`` -- checked immediately before a sequence's decode
+  step actually runs. Base behavior (Phase 0/1): always ``True`` -- a
+  contiguous reservation already committed the sequence's entire
+  worst-case span at admission, so a decode step can never fail for lack
+  of space. Phase 2's ``PagedKVEngine`` overrides this to ask the paged
+  allocator whether it can grow the sequence's block table by one more
+  token; if not, the sequence is left running and unchanged this tick (a
+  ``DECODE_STALLED`` event is recorded instead of ``DECODE_STEP``) and is
+  retried next tick -- this is what lets "KV exhaustion mid-decode" be a
+  safe, observable outcome instead of a crash or silent corruption.
+* ``_begin_tick()`` / ``_end_tick()`` -- no-op hooks bracketing each
+  ``step()`` call, before admission runs and after decode runs
+  respectively. Phase 3's ``SchedulerEngine`` uses ``_begin_tick`` to
+  reset its per-step token budget and per-tick bookkeeping, and
+  ``_end_tick`` to assemble that tick's ``SchedulerDecision`` (the
+  scheduling-timeline entry) once both admission and decode outcomes for
+  the tick are known.
 """
 
 from __future__ import annotations
@@ -126,10 +148,16 @@ class SimulationEngine:
         *already* running sequence by one step -- sequences admitted this
         tick are excluded from this tick's decode pass. See the module
         docstring for why admission runs first (event-log monotonicity)
-        while still not decoding newly admitted sequences."""
+        while still not decoding newly admitted sequences.
+
+        ``_begin_tick``/``_end_tick`` bracket the whole thing as no-op
+        hooks for subclasses (Phase 3's scheduler) that need per-tick
+        bookkeeping -- see the module docstring."""
         self.clock.advance(self.decode_tick)
+        self._begin_tick()
         just_admitted = self._admit_arrivals()
         self._decode_step(skip=just_admitted)
+        self._end_tick()
 
     def run_to_completion(self, max_ticks: int = 1_000_000) -> None:
         """Repeatedly ``step()`` until every loaded request has reached a
@@ -148,16 +176,31 @@ class SimulationEngine:
 
     # -- internals (override points for subclasses) ----------------------
 
+    def _record_new_arrivals(self, now: float) -> None:
+        """Record an ``ARRIVED`` event, exactly once, for every waiting
+        request whose ``arrival_time`` has now passed. Split out of
+        ``_admit_arrivals`` so Phase 3's ``SchedulerEngine`` can reuse it
+        verbatim while overriding the admission-attempt loop itself."""
+        for req_id, req in self.waiting.items():
+            if req.arrival_time <= now and req_id not in self._arrived_ids:
+                self._arrived_ids.add(req_id)
+                self.event_log.record(req.arrival_time, req_id, EventType.ARRIVED)
+
+    def _arrived_waiting_fcfs(self) -> list[str]:
+        """Request ids currently in ``waiting`` that have arrived, oldest
+        arrival first (FCFS, D5's default fairness policy)."""
+        return sorted(
+            (rid for rid in self.waiting if rid in self._arrived_ids),
+            key=lambda rid: self.waiting[rid].arrival_time,
+        )
+
     def _admit_arrivals(self) -> set[str]:
         """Record this tick's ``ARRIVED`` events and retry admission for
         everything that has arrived. Returns the set of request ids
         admitted *during this call* so ``step()`` can exclude them from
         this tick's decode pass."""
         now = self.clock.now()
-        for req_id, req in self.waiting.items():
-            if req.arrival_time <= now and req_id not in self._arrived_ids:
-                self._arrived_ids.add(req_id)
-                self.event_log.record(req.arrival_time, req_id, EventType.ARRIVED)
+        self._record_new_arrivals(now)
 
         # Retry admission for everything that has arrived, oldest arrival
         # first (FCFS). A base-class admission never fails, but Phase 1's
@@ -165,12 +208,8 @@ class SimulationEngine:
         # must re-attempt previously-stuck requests too, not just new
         # arrivals. Requests that have not arrived yet are left untouched
         # in ``waiting``.
-        arrived_waiting = sorted(
-            (rid for rid in self.waiting if rid in self._arrived_ids),
-            key=lambda rid: self.waiting[rid].arrival_time,
-        )
         admitted_this_tick: set[str] = set()
-        for req_id in arrived_waiting:
+        for req_id in self._arrived_waiting_fcfs():
             req = self.waiting.get(req_id)
             if req is None:
                 continue  # admitted or rejected earlier in this same pass
@@ -202,6 +241,13 @@ class SimulationEngine:
         for req_id, seq in self.running.items():
             if req_id in skip:
                 continue
+            if not self._can_decode(seq):
+                # KV exhaustion this tick (Phase 2+ only -- base default is
+                # always True): seq is left exactly as it was and retried
+                # next tick, not crashed and not silently advanced without
+                # backing KV space. See module docstring.
+                self.event_log.record(self.clock.now(), req_id, EventType.DECODE_STALLED)
+                continue
             seq.step_decode()
             self._on_decode_step(seq)
             self.event_log.record(
@@ -221,8 +267,29 @@ class SimulationEngine:
             self.event_log.record(self.clock.now(), req_id, EventType.COMPLETED)
             self._on_release(seq)
 
+    def _can_decode(self, seq: SequenceState) -> bool:
+        """Hook: may ``seq`` receive a decode step this tick? Base default
+        (Phase 0/1): always True. Phase 2's ``PagedKVEngine`` overrides
+        this to check whether the paged allocator can grow the sequence's
+        block table by one more token; see module docstring."""
+        return True
+
     def _on_decode_step(self, seq: SequenceState) -> None:
-        """Hook for subclasses (Phase 1: update reserved-memory "used" accounting)."""
+        """Hook for subclasses (Phase 1: update reserved-memory "used" accounting;
+        Phase 2: physically grow the sequence's paged block table). Only called
+        when ``_can_decode`` returned True and ``seq.step_decode()`` already ran."""
 
     def _on_release(self, seq: SequenceState) -> None:
-        """Hook for subclasses (Phase 1: free reserved contiguous capacity)."""
+        """Hook for subclasses (Phase 1: free reserved contiguous capacity;
+        Phase 2: free the sequence's physical blocks back to the pool)."""
+
+    def _begin_tick(self) -> None:
+        """Hook: per-tick setup, run once at the start of ``step()`` before
+        admission or decode. No-op by default; Phase 3's ``SchedulerEngine``
+        resets its per-step token budget and decision-tracking state here."""
+
+    def _end_tick(self) -> None:
+        """Hook: per-tick teardown, run once at the end of ``step()`` after
+        both admission and decode have run. No-op by default; Phase 3's
+        ``SchedulerEngine`` assembles this tick's ``SchedulerDecision``
+        (the scheduling-timeline entry) here, once outcomes are known."""

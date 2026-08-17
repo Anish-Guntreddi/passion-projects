@@ -8,16 +8,19 @@ exist, per agent execution rule #4 ("never fabricate performance
 numbers") — the plan is written first; results get committed only once
 they are real.
 
-## What Phase 1 already demonstrates (not a formal benchmark)
+## What Phases 1-3 already demonstrate (not a formal benchmark)
 
-`examples/phase1_fragmentation_demo.py` and
-`tests/unit/test_contiguous.py` already produce real, reproducible
-numbers for the Phase 1 exit criterion ("variable-length trace
-demonstrates fragmentation/waste numerically") using
-`ContiguousMemoryModel`. These are deterministic simulation outputs, not
-wall-clock benchmark results, and are not written to `benchmarks/raw/` —
-that directory is reserved for Phase 7's committed, methodology-governed
-results.
+`examples/phase1_fragmentation_demo.py` (`ContiguousMemoryModel`),
+`examples/phase2_paged_kv_demo.py` (`PagedKVManager` — measured 31.5%
+peak waste vs. contiguous's 63.7% on the identical trace/capacity), and
+`examples/phase3_scheduler_demo.py` (`SchedulerEngine`'s per-tick
+scheduling timeline) already produce real, reproducible numbers for each
+phase's own exit criterion, backed by the corresponding regression tests
+(`tests/unit/test_contiguous.py`, `tests/unit/test_manager.py`,
+`tests/integration/test_scheduler_replay.py`). These are deterministic
+simulation outputs, not wall-clock benchmark results, and are not written
+to `benchmarks/raw/` — that directory is reserved for Phase 7's
+committed, methodology-governed results.
 
 ## Planned workloads (spec S1.8)
 
@@ -45,11 +48,13 @@ from them, not hand-edited):
 TTFT; inter-token latency / time-per-output-token; requests/sec and
 tokens/sec; queue delay; active sequences; KV physical capacity / used
 tokens / reserved capacity / utilization; allocation failures /
-preemptions; fragmentation/waste for the contiguous baseline (available
-today via `ContiguousMemoryMetrics` — the rest require a real scheduler
-(Phase 3) and/or real model (Phase 5) to be meaningful, since Phase 0-1
-has no wall-clock cost model at all: `SimClock` ticks are abstract units,
-not measured latency).
+preemptions; fragmentation/waste for the contiguous baseline. KV
+utilization/fragmentation and per-tick admission/rejection counts are
+available today (`ContiguousMemoryMetrics`, `PagedKVMetrics`,
+`SchedulerDecision`) — TTFT, inter-token latency, and throughput still
+require a real model (Phase 5) to be meaningful, since even Phase 3's
+scheduler has no wall-clock cost model: `SimClock` ticks are abstract
+units, not measured latency.
 
 ## Reporting rules
 

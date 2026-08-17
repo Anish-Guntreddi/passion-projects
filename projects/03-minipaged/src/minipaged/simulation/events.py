@@ -22,6 +22,10 @@ class EventType(enum.Enum):
     COMPLETED = "completed"  # RUNNING -> COMPLETED
     CANCELLED = "cancelled"  # -> CANCELLED
     ADMISSION_REJECTED = "admission_rejected"  # Phase 1+: insufficient/impossible KV capacity
+    DECODE_STALLED = "decode_stalled"  # Phase 2+: a running sequence wanted a decode step this
+    # tick but the paged KV allocator could not grow its block table (no free physical
+    # blocks) -- the sequence stays RUNNING, unchanged, and is retried next tick. Distinct
+    # from ADMISSION_REJECTED (which applies to a still-WAITING request).
 
 
 @dataclasses.dataclass(frozen=True)
