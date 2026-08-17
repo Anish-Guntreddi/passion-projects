@@ -1,10 +1,12 @@
 # ADR-0003: Stats interface is a syscall, not a procfs-like VFS
 
-**Status:** Accepted (spec default); implementation deferred to Phase 2
+**Status:** Accepted; implemented in Phase 2 (validated by `xvtop` in
+Phase 3)
 **Decision:** D3 (spec §1.10)
 **Date:** 2026-08-17 (recorded ahead of implementation, per the spec's
 kickoff prompt: "use the §1.10 defaults for D3, D4, D6, D7 with ADRs"
-before implementing phase-by-phase)
+before implementing phase-by-phase; revisited after Phase 2/3
+implementation)
 
 ## Context
 
@@ -16,11 +18,14 @@ vs. a dedicated stats syscall; the spec's own recommended default is
 
 Adopt the spec default: a dedicated syscall-based statistics interface
 for Phase 2 (process accounting) and Phase 3 (`xvtop`), not a
-procfs-like virtual filesystem. Not implemented in Phase 0/1 (no
-accounting fields exist yet); recorded now so Phase 1's tracing
-syscall and Phase 2's stats syscall are designed against one
-consistent "small syscalls, safe scope, no new VFS machinery"
-philosophy.
+procfs-like virtual filesystem. Implemented in Phase 2 as `xvstat(2)`
+(`kernel/sysproc.c: sys_xvstat`, `kernel/proc.c: procstat()`,
+`kernel/pstat.h: struct xv_pstat`) -- see `docs/accounting.md` for the
+full design -- and consumed in Phase 3 by `xvtop` polling it in a
+loop, exactly as predicted below. Recorded ahead of implementation so
+Phase 1's tracing syscall and Phase 2's stats syscall were designed
+against one consistent "small syscalls, safe scope, no new VFS
+machinery" philosophy.
 
 ## Rationale
 
@@ -37,7 +42,8 @@ within "safe scope" (validated by `copyout()` itself).
 
 ## Consequences
 
-`xvtop` (Phase 3) will poll a stats syscall in a loop rather than
-open/read files under `/proc`. If procfs is later attempted as a
-stretch goal, it can be layered on top of the same underlying
-per-process struct without changing the struct's shape.
+`xvtop` (Phase 3) polls `xvstat(2)` in a loop (`idx = 0..NPROC-1`,
+stopping at the first out-of-range index) rather than open/read files
+under `/proc` -- see `docs/xvtop.md`. If procfs is later attempted as
+a stretch goal, it can be layered on top of the same underlying
+`struct xv_pstat` without changing its shape.

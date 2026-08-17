@@ -7,17 +7,24 @@
 # bare `mkfs` pattern would match the mkfs/ *directory* itself (gitignore
 # patterns with no slash match at any depth) and silently exclude
 # mkfs/mkfs.c from being committed at all. So that one path is written
-# out explicitly instead. `_*` (built user binaries like user/_cat,
-# user/_xtrace) is kept as-is: no tracked file or directory in this
-# project starts with `_`, so it has no equivalent collision. See
-# docs/upstream-delta.md.
+# out explicitly instead. For the same reason, the built-user-binaries
+# pattern is `user/_*`, not a bare `_*`: a bare `_*` also matches at any
+# depth, which would silently exclude hand-written source files whose
+# names start with `_` by convention -- e.g. tests/syscall/_helpers.py,
+# tests/accounting/_acct_helpers.py (Phase 1/2 test-harness modules,
+# `_`-prefixed only to mark "private to this test package", the normal
+# Python convention, not build output). Scoping the pattern to `user/`
+# -- the only directory where `make` actually produces `_`-prefixed
+# *artifacts* (`user/_cat`, `user/_xtrace`, ... per the Makefile's
+# `_%: %.o $(ULIB) ...` UPROGS rule) -- ignores exactly the build
+# artifacts and nothing else. See docs/upstream-delta.md.
 
 *.o
 *.d
 *.asm
 *.sym
 *.img
-_*
+user/_*
 kernel/kernel
 mkfs/mkfs
 user/usys.S

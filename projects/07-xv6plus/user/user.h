@@ -1,6 +1,7 @@
 #define SBRK_ERROR ((char *)-1)
 
 struct stat;
+struct xv_pstat;
 
 // system calls
 int fork(void);
@@ -25,6 +26,7 @@ char* sys_sbrk(int,int);
 int pause(int);
 int uptime(void);
 int trace(int);       // xv6-plus: FR1 syscall tracing control (Phase 1)
+int xvstat(int, struct xv_pstat*); // xv6-plus: FR2/FR3 accounting stats interface (Phase 2)
 
 // ulib.c
 int stat(const char*, struct stat*);

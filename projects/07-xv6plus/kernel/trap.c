@@ -171,6 +171,32 @@ clockintr()
     release(&tickslock);
   }
 
+  // xv6-plus (Phase 2, FR2): charge one runtick to whichever process
+  // is currently executing on *this* hart, if any. This runs on
+  // every hart's own periodic timer interrupt (not gated by
+  // cpuid()==0 like the global `ticks` above), so it is a per-hart,
+  // best-effort proxy for "how many timer interrupts fired while
+  // this process held a CPU" -- consistent with ADR-0007's choice of
+  // tick granularity, not a claim of wall-clock precision.
+  //
+  // Locking (see docs/decisions/0009-accounting-counter-locking.md):
+  // tickslock has already been released above by the time we get
+  // here (this is a separate, non-nested critical section), and
+  // clockintr() is only ever reached -- via usertrap()/kerneltrap()
+  // -> devintr() -- at a point where no spinlock is held on this
+  // hart (taking any spinlock disables interrupts for its duration,
+  // which is exactly what would have prevented this timer trap from
+  // being taken in the first place). So acquiring myproc()'s own
+  // p->lock here cannot deadlock against anything this same hart is
+  // already holding, and gives runticks the same hard cross-process-
+  // read guarantee as the other Phase 2 counters.
+  struct proc *p = myproc();
+  if(p){
+    acquire(&p->lock);
+    p->runticks++;
+    release(&p->lock);
+  }
+
   // ask for the next timer interrupt. this also clears
   // the interrupt request. 1000000 is about a tenth
   // of a second.

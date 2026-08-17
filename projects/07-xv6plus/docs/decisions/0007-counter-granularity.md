@@ -1,12 +1,13 @@
 # ADR-0007: Accounting counters are tick-granularity
 
-**Status:** Accepted (spec default); implementation deferred to Phase 2
+**Status:** Accepted; implemented in Phase 2
 **Decision:** D7 (spec §1.10)
-**Date:** 2026-08-17 (recorded ahead of implementation; see ADR-0003)
+**Date:** 2026-08-17 (recorded ahead of implementation; see ADR-0003;
+revisited after Phase 2 implementation)
 
 ## Context
 
-Phase 2 accounting will report process runtime. D7 is ticks vs.
+Phase 2 accounting reports process runtime. D7 is ticks vs.
 finer-grained counters; spec default: ticks.
 
 ## Decision
@@ -14,10 +15,13 @@ finer-grained counters; spec default: ticks.
 Adopt the spec default: the existing `ticks` global, already
 incremented by the timer interrupt and already exposed via
 `sys_uptime()` (`kernel/trap.c`, `kernel/sysproc.c`), is the unit for
-any Phase 2+ runtime/wait-time accounting -- not a finer-grained
-(cycle-counter or RTC-based) measurement. Not applicable to Phase 0/1
-(no timing accounting exists yet); recorded now for the same reason as
-ADR-0003/0004.
+Phase 2's runtime/wait-time accounting -- not a finer-grained
+(cycle-counter or RTC-based) measurement. Implemented in Phase 2:
+`kernel/trap.c`'s `clockintr()` charges one `runtick` per timer
+interrupt to whichever process is running on that hart, and
+`kernel/proc.c`'s `sleep()` charges `waitticks` in units of the same
+global `ticks` counter. Recorded ahead of implementation for the same
+reason as ADR-0003/0004.
 
 ## Rationale
 

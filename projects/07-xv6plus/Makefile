@@ -1,7 +1,10 @@
 # xv6-plus: vendored from mit-pdos/xv6-riscv @ xv6-riscv-rev5
 # (7d7adbb1b0acbd67c9766a20d0f9900fef2789fa), then extended. The only
-# xv6-plus-specific change in this file is the $U/_xtrace line in
-# UPROGS below. See docs/upstream-delta.md for the full delta and
+# xv6-plus-specific changes in this file are the UPROGS entries for
+# the xv6-plus-original user programs below ($U/_xtrace, $U/_tracetest
+# from Phase 1; $U/_accttest, $U/_acctforktest, $U/_acctexectest,
+# $U/_acctreport, $U/_xvstatbounds, $U/_xvtop, $U/_xvtopzombie from
+# Phase 2/3). See docs/upstream-delta.md for the full delta and
 # docs/decisions/0001-upstream-revision-pin.md for the pin rationale.
 
 K=kernel
@@ -150,6 +153,13 @@ UPROGS=\
 	$U/_dorphan\
 	$U/_xtrace\
 	$U/_tracetest\
+	$U/_accttest\
+	$U/_acctforktest\
+	$U/_acctexectest\
+	$U/_acctreport\
+	$U/_xvstatbounds\
+	$U/_xvtop\
+	$U/_xvtopzombie\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

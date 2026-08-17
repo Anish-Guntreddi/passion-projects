@@ -115,4 +115,25 @@ struct proc {
   // freeproc() so a reused proc-table slot never inherits a stale
   // tracing state from a previous occupant (docs/invariants.md #3, #5).
   int trace_mask;
+
+  // xv6-plus: per-process accounting (Phase 2, FR2/FR3). Deliberately
+  // NOT grouped with trace_mask above under the "owner mutates, no
+  // lock" rule: unlike trace_mask (read only by the owning process's
+  // own syscall-dispatch code), these three counters are read
+  // cross-process by the xvstat(2) syscall (kernel/sysproc.c) walking
+  // the whole proc table, so every writer explicitly holds p->lock
+  // around each mutation -- see
+  // docs/decisions/0009-accounting-counter-locking.md for the full
+  // reasoning (including a lock-order hazard that rules out reusing
+  // tickslock for this) and docs/accounting.md for the design
+  // writeup. Initialized to 0 in allocproc() and reset to 0 again in
+  // freeproc(), exactly like trace_mask. UNLIKE trace_mask: NOT
+  // copied parent->child in kfork() (each process's own counters
+  // start at 0 -- see the comment at that call site) and, like
+  // trace_mask, NOT touched by kexec() (same struct proc/pid across
+  // exec, so accounting is a per-pid-lifetime total, not a
+  // per-program-image one).
+  uint64 runticks;      // ticks this process has spent RUNNING (ADR-0007)
+  uint64 waitticks;     // ticks this process has spent SLEEPING (blocked)
+  uint64 syscall_count; // total syscalls made since process creation
 };

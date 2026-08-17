@@ -23,3 +23,6 @@
 // xv6-plus: FR1 syscall tracing control (Phase 1). Not part of
 // upstream xv6; see docs/upstream-delta.md.
 #define SYS_trace  22
+// xv6-plus: FR2/FR3 per-process accounting stats interface (Phase 2).
+// Not part of upstream xv6; see docs/upstream-delta.md.
+#define SYS_xvstat 23

@@ -103,6 +103,8 @@ extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
 // xv6-plus: FR1 syscall tracing control (Phase 1).
 extern uint64 sys_trace(void);
+// xv6-plus: FR2/FR3 per-process accounting stats interface (Phase 2).
+extern uint64 sys_xvstat(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -129,6 +131,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_trace]   sys_trace,
+[SYS_xvstat]  sys_xvstat,
 };
 
 // xv6-plus: names for the tracing framework's post-syscall print
@@ -158,6 +161,7 @@ static char *syscall_names[] = {
 [SYS_mkdir]   "mkdir",
 [SYS_close]   "close",
 [SYS_trace]   "trace",
+[SYS_xvstat]  "xvstat",
 };
 
 void
@@ -168,6 +172,26 @@ syscall(void)
 
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    // xv6-plus (Phase 2, FR2): count this syscall toward the calling
+    // process's total, before dispatching it. Counting before (not
+    // after) matters for exactly one syscall: SYS_exit's handler
+    // (kexit()) never returns to this function -- it jumps straight
+    // into sched() -- so counting after dispatch would silently
+    // never count exit at all (see docs/invariants.md's "Known,
+    // deliberate limitation" for the analogous trace_mask case).
+    // freeproc() resets the counter to 0 on free regardless, so a
+    // reaped process's final count is not observable afterwards.
+    //
+    // p->lock is taken here (unlike trace_mask, which needs none --
+    // see docs/decisions/0006) because syscall_count, unlike
+    // trace_mask, is read cross-process by xvstat(2) (Phase 2, FR3);
+    // see docs/decisions/0009-accounting-counter-locking.md. No other
+    // lock is held at this point in usertrap()'s syscall path, so
+    // this cannot introduce a lock-order cycle.
+    acquire(&p->lock);
+    p->syscall_count++;
+    release(&p->lock);
+
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
     p->trapframe->a0 = syscalls[num]();

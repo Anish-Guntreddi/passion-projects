@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -130,6 +131,12 @@ found:
   // invariant "telemetry is initialized at allocation" holds even if
   // that ever changes. See docs/invariants.md #3.)
   p->trace_mask = 0;
+  // xv6-plus (Phase 2, FR2): fresh accounting counters for a
+  // freshly-allocated slot. See the comment on these fields in
+  // kernel/proc.h and docs/accounting.md.
+  p->runticks = 0;
+  p->waitticks = 0;
+  p->syscall_count = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -178,6 +185,13 @@ freeproc(struct proc *p)
   // xv6-plus: never let a reused proc-table slot inherit the previous
   // occupant's tracing state. See docs/invariants.md #5.
   p->trace_mask = 0;
+  // xv6-plus (Phase 2, FR2): same rule for the accounting counters --
+  // a reused slot must never show a previous occupant's runtime,
+  // wait time, or syscall count. See docs/invariants.md #5 and
+  // tests/accounting/test_slot_reuse_reset.py.
+  p->runticks = 0;
+  p->waitticks = 0;
+  p->syscall_count = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -300,6 +314,15 @@ kfork(void)
   // process's children are traced too, until they call trace() again
   // (e.g. trace(0) to opt out). See docs/tracing.md.
   np->trace_mask = p->trace_mask;
+
+  // xv6-plus (Phase 2, FR2): deliberately NOT inherited. np's
+  // accounting counters are already 0 from allocproc() above and
+  // stay that way here -- a child's runtime/wait/syscall totals
+  // describe its own execution from birth, not a copy of however
+  // much the parent had already accumulated. This is the opposite
+  // choice from trace_mask just above; see docs/accounting.md
+  // "fork/exec/exit semantics" for the rationale and
+  // tests/accounting/test_fork_fresh_counters.py for the test.
 
   pid = np->pid;
 
@@ -554,7 +577,22 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
+  // xv6-plus (Phase 2, FR2): snapshot the tick count *before* taking
+  // p->lock, and deliberately without tickslock. See
+  // docs/decisions/0009-accounting-counter-locking.md: taking
+  // tickslock while p->lock is held (as it is for the rest of this
+  // function) would run p->lock-then-tickslock, the reverse of the
+  // tickslock-then-p->lock order clockintr() already establishes
+  // (it calls wakeup(&ticks) -- which acquires p->lock -- while
+  // holding tickslock), and could deadlock against it. `ticks` is a
+  // plain aligned word; RISC-V guarantees an unlocked load of it can
+  // only ever observe a fully-formed old or new value, never a torn
+  // one, which is all a best-effort accounting counter needs
+  // (invariant #8) -- unlike sys_uptime()'s locked read, this one is
+  // not claiming a precise, race-free snapshot.
+  uint sleep_start = ticks;
+
   // Must acquire p->lock in order to
   // change p->state and then call sched.
   // Once we hold p->lock, we can be
@@ -573,6 +611,14 @@ sleep(void *chan, struct spinlock *lk)
 
   // Tidy up.
   p->chan = 0;
+
+  // xv6-plus (Phase 2, FR2): by the time sched() returns here, this
+  // process has already been rescheduled and run again (that's what
+  // "returned" means), so (ticks - sleep_start) is how long it was
+  // blocked. Still holding p->lock (unchanged from upstream), so
+  // this mutation is protected exactly like any other cross-process-
+  // readable Phase 2 counter (see kernel/proc.h and ADR-0009).
+  p->waitticks += (ticks - sleep_start);
 
   // Reacquire original lock.
   release(&p->lock);
@@ -668,6 +714,56 @@ either_copyin(void *dst, int user_src, uint64 src, uint64 len)
     memmove(dst, (char*)src, len);
     return 0;
   }
+}
+
+// xv6-plus (Phase 2, FR3): fill *out with a point-in-time snapshot of
+// proc[idx]'s telemetry, for the xvstat(2) syscall (kernel/sysproc.c).
+// Returns 0 on success (idx was in range), -1 if idx is outside
+// [0, NPROC) -- the sentinel a caller enumerating idx = 0, 1, 2, ...
+// (see user/xvtop.c, tests/accounting/, tests/xvtop/) uses to know it
+// has reached the end of the table. A slot that is currently UNUSED
+// (or was reaped since the caller last polled) is not an error: *out
+// is still filled in, with pid == 0 and state == XV_UNUSED, and the
+// caller decides whether to display it (docs/invariants.md #5: xvtop
+// itself filters these out).
+//
+// Locking (docs/decisions/0009-accounting-counter-locking.md): every
+// field is read while holding proc[idx]'s own p->lock. pid and state
+// get a *hard* consistency guarantee from this, because every writer
+// of those two fields already holds p->lock too (documented at the
+// top of kernel/proc.h, unmodified upstream). sz and name do not:
+// their existing writers (growproc(), kexec()) intentionally follow
+// the lock-free "private to the process" convention and were not
+// changed for this feature, so a concurrent grow/exec on the target
+// can still be observed mid-update here. On RISC-V a naturally-
+// aligned 64-bit load/store is a single atomic instruction, so this
+// can never produce a torn/garbage sz value, only a momentarily stale
+// one -- acceptable for a monitoring display and explicitly not a
+// safety property this syscall relies on (invariant #8). runticks,
+// waitticks, and syscall_count are new Phase 2 counters whose every
+// writer (sleep(), syscall(), clockintr()) was deliberately written
+// to also take p->lock, specifically so this function can give them
+// the same hard guarantee as pid/state -- see the ADR for why Phase
+// 1's trace_mask could skip locking entirely and Phase 2 cannot.
+int
+procstat(int idx, struct xv_pstat *out)
+{
+  if(idx < 0 || idx >= NPROC)
+    return -1;
+
+  struct proc *p = &proc[idx];
+
+  acquire(&p->lock);
+  out->pid = p->pid;
+  out->state = p->state; // enum procstate values line up with XV_* (kernel/pstat.h)
+  out->sz = p->sz;
+  out->runticks = p->runticks;
+  out->waitticks = p->waitticks;
+  out->syscalls = p->syscall_count;
+  safestrcpy(out->name, p->name, sizeof(out->name));
+  release(&p->lock);
+
+  return 0;
 }
 
 // Print a process listing to console.  For debugging.

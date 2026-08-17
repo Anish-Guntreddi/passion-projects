@@ -6,6 +6,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "vm.h"
+#include "pstat.h"
 
 uint64
 sys_exit(void)
@@ -122,5 +123,37 @@ sys_trace(void)
 
   argint(0, &mask);
   myproc()->trace_mask = mask;
+  return 0;
+}
+
+// xv6-plus: FR2/FR3 per-process accounting stats interface (Phase 2,
+// ADR-0003). Fetches a point-in-time snapshot of proc-table slot idx
+// into the user struct xv_pstat at addr. idx is a plain int (no user
+// pointer to validate); addr is validated by copyout() itself, same
+// as sys_fstat()'s filestat() (kernel/file.c) -- see invariant #7 in
+// docs/invariants.md. All the actual field-reading logic lives in the
+// small, independently-reasoned-about kernel helper procstat()
+// (kernel/proc.c), keeping this syscall wrapper itself trivial per
+// the handoff brief's "syscalls kept small" rule.
+//
+// Returns 0 and fills *addr on success, -1 if idx is out of
+// [0, NPROC) range or the copyout itself fails (e.g. addr not
+// mapped/writable in the caller's page table).
+uint64
+sys_xvstat(void)
+{
+  int idx;
+  uint64 addr;
+  struct xv_pstat st;
+
+  argint(0, &idx);
+  argaddr(1, &addr);
+
+  if(procstat(idx, &st) < 0)
+    return -1;
+
+  if(copyout(myproc()->pagetable, addr, (char *)&st, sizeof(st)) < 0)
+    return -1;
+
   return 0;
 }
