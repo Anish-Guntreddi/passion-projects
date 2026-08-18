@@ -7,7 +7,8 @@
 # Phase 2/3; $U/_schedbench, $U/_tixtest, $U/_tixvalidate from Phase 4;
 # $U/_vmfaulttest, $U/_vmoobtest, $U/_vmforktest, $U/_vmexectest,
 # $U/_vmexhausttest, $U/_vmpermtest, $U/_vmpfailcount from Phase 5,
-# the last two added during review-fix followup). See
+# the last two added during review-fix followup; $U/_stressforkexit,
+# $U/_stresssyscalls, $U/_stressvm, $U/_stresssched from Phase 6). See
 # docs/upstream-delta.md for the full delta and
 # docs/decisions/0001-upstream-revision-pin.md for the pin rationale.
 
@@ -174,6 +175,10 @@ UPROGS=\
 	$U/_vmexhausttest\
 	$U/_vmpermtest\
 	$U/_vmpfailcount\
+	$U/_stressforkexit\
+	$U/_stresssyscalls\
+	$U/_stressvm\
+	$U/_stresssched\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

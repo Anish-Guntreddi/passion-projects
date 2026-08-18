@@ -1,0 +1,224 @@
+# label: phase6_UPROGS_with_stress_bins_FSSIZE_20000_post_fix
+# command: usertests
+# captured: 2026-08-17T23:13:32.054243+00:00
+# wall_elapsed_seconds: 321.233
+usertests
+usertests starting
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: OK
+test createtest: OK
+test dirtest: OK
+test exectest: OK
+test pipe1: OK
+test killstatus: OK
+test preempt: kill... wait... OK
+test exitwait: OK
+test reparent: OK
+test twochildren: OK
+test forkfork: OK
+test forkforkfork: OK
+test reparent2: OK
+test mem: OK
+test sharedfd: OK
+test fourfiles: OK
+test createdelete: OK
+test unlinkread: OK
+test linktest: OK
+test concreate: OK
+test linkunlink: OK
+test subdir: OK
+test bigwrite: OK
+test bigfile: OK
+test fourteen: OK
+test rmdot: OK
+test dirfile: OK
+test iref: OK
+test forktest: OK
+test sbrkbasic: OK
+test sbrkmuch: OK
+test kernmem: usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6474 va=0x80000000
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6475 va=0x8000c350
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6476 va=0x800186a0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6477 va=0x800249f0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6478 va=0x80030d40
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6479 va=0x8003d090
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6480 va=0x800493e0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6481 va=0x80055730
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6482 va=0x80061a80
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6483 va=0x8006ddd0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6484 va=0x8007a120
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6485 va=0x80086470
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6486 va=0x800927c0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6487 va=0x8009eb10
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6488 va=0x800aae60
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6489 va=0x800b71b0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6490 va=0x800c3500
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6491 va=0x800cf850
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6492 va=0x800dbba0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6493 va=0x800e7ef0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6494 va=0x800f4240
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6495 va=0x80100590
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6496 va=0x8010c8e0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6497 va=0x80118c30
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6498 va=0x80124f80
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6499 va=0x801312d0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6500 va=0x8013d620
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6501 va=0x80149970
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6502 va=0x80155cc0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6503 va=0x80162010
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6504 va=0x8016e360
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6505 va=0x8017a6b0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6506 va=0x80186a00
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6507 va=0x80192d50
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6508 va=0x8019f0a0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6509 va=0x801ab3f0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6510 va=0x801b7740
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6511 va=0x801c3a90
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6512 va=0x801cfde0
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6513 va=0x801dc130
+OK
+test MAXVAplus: usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6515 va=0x4000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6516 va=0x8000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6517 va=0x10000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6518 va=0x20000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6519 va=0x40000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6520 va=0x80000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6521 va=0x100000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6522 va=0x200000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6523 va=0x400000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6524 va=0x800000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6525 va=0x1000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6526 va=0x2000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6527 va=0x4000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6528 va=0x8000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6529 va=0x10000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6530 va=0x20000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6531 va=0x40000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6532 va=0x80000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6533 va=0x100000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6534 va=0x200000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6535 va=0x400000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6536 va=0x800000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6537 va=0x1000000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6538 va=0x2000000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6539 va=0x4000000000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6540 va=0x8000000000000000
+OK
+test sbrkfail: OK
+test sbrkarg: OK
+test validatetest: OK
+test bsstest: OK
+test bigargtest: OK
+test argptest: OK
+test stacktest: usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6560 va=0xfea0
+OK
+test nowrite: usertrap(): page fault (scause=0xf) could not be serviced (permission violation: write access to a page mapped without sufficient permission) pid=6562 va=0x0
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6563 va=0x80000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6564 va=0x3fffffe000
+usertrap(): page fault (scause=0xf) could not be serviced (permission violation: write access to a page mapped without sufficient permission) pid=6565 va=0x3ffffff000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6566 va=0x4000000000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6567 va=0xffffffffffffffff
+OK
+test pgbug: OK
+test sbrkbugs: usertrap(): unexpected scause 0xc pid=6570
+            sepc=0x4d14 stval=0x4d14
+usertrap(): unexpected scause 0xc pid=6571
+            sepc=0x4d14 stval=0x4d14
+usertrap(): page fault (scause=0xd) could not be serviced (invalid address or out of memory) pid=6572 va=0x10eb8
+OK
+test sbrklast: OK
+test sbrk8000: OK
+test badarg: OK
+test lazy_alloc: OK
+test lazy_unmap: usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6578 va=0x12000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6579 va=0x1012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6580 va=0x2012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6581 va=0x3012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6582 va=0x4012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6583 va=0x5012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6584 va=0x6012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6585 va=0x7012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6586 va=0x8012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6587 va=0x9012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6588 va=0xa012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6589 va=0xb012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6590 va=0xc012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6591 va=0xd012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6592 va=0xe012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6593 va=0xf012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6594 va=0x10012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6595 va=0x11012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6596 va=0x12012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6597 va=0x13012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6598 va=0x14012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6599 va=0x15012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6600 va=0x16012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6601 va=0x17012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6602 va=0x18012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6603 va=0x19012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6604 va=0x1a012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6605 va=0x1b012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6606 va=0x1c012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6607 va=0x1d012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6608 va=0x1e012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6609 va=0x1f012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6610 va=0x20012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6611 va=0x21012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6612 va=0x22012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6613 va=0x23012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6614 va=0x24012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6615 va=0x25012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6616 va=0x26012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6617 va=0x27012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6618 va=0x28012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6619 va=0x29012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6620 va=0x2a012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6621 va=0x2b012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6622 va=0x2c012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6623 va=0x2d012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6624 va=0x2e012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6625 va=0x2f012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6626 va=0x30012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6627 va=0x31012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6628 va=0x32012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6629 va=0x33012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6630 va=0x34012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6631 va=0x35012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6632 va=0x36012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6633 va=0x37012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6634 va=0x38012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6635 va=0x39012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6636 va=0x3a012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6637 va=0x3b012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6638 va=0x3c012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6639 va=0x3d012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6640 va=0x3e012000
+usertrap(): page fault (scause=0xf) could not be serviced (invalid address or out of memory) pid=6641 va=0x3f012000
+OK
+test lazy_copy: OK
+usertests slow tests starting
+test bigdir: OK
+test manywrites: OK
+test badwrite: OK
+test execout: OK
+test diskfull: balloc: out of blocks
+ialloc: no inodes
+ialloc: no inodes
+OK
+test outofinodes: ialloc: no inodes
+OK
+ALL TESTS PASSED
+$ 

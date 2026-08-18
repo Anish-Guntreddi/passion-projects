@@ -375,6 +375,141 @@ the underlying lazy-allocation mechanism itself is upstream and
 untouched either way, so a revert cannot regress `sbrk()`/lazy-fault
 behavior, only this project's telemetry and tests of it.
 
+### Phase 6 (stress/race hardening, FR7)
+
+New files:
+
+| File | What |
+|---|---|
+| `user/stressforkexit.c` | Concurrent fork/exit: 5 rounds of 8 genuinely-concurrent children racing `allocpid()`/`allocproc()`/`freeproc()`/`wait_lock` across every hart, then an exact proc-table-fill proof. |
+| `user/stresssyscalls.c` | Syscall-heavy: 4 workers, 6000 concurrent `getpid()` calls each, racing `kernel/syscall.c`'s dispatch path and each worker's own `syscall_count`. |
+| `user/stresssched.c` | Scheduler stress: 5 competing spinners under `SCHED_LOTTERY` while a separate chaos process concurrently calls `schedpolicy()`/`settickets()` (capped at 40 iterations, but bound in practice by the 20-tick target window -- observed local runs land in the single-digit-to-low-double-digit range, never near 40), racing the live lottery draw and `sched_lock`. |
+| `user/stressvm.c` | Memory-pressure: 3 (== NCPU) workers concurrently calling `vmfault()`/`kalloc()`/`mappages()` -- a clean grow/touch/shrink phase, then a genuine concurrent multi-hart exhaustion of the same shared physical pool + reclaim proof. |
+| `tests/stress/*.py`, `tests/stress/_stress_helpers.py` | Phase 6 automated test suite (see `docs/stress-testing.md`). |
+| `docs/stress-testing.md` | Phase 6 design writeup: per-program rationale, the shared-console non-atomicity pattern all four work around, and the lock/invariant audit (spec Phase 6 deliverable). |
+| `benchmarks/raw/usertests/phase5_baseline_pre_phase6.txt`, `phase6_fssize_regression_repro.txt`, `phase6_fssize_fixed.txt` | Raw `usertests` transcripts backing the `FSSIZE` regression/fix narrative below (baseline, pre-fix failure, post-fix pass), captured with `wall_elapsed_seconds` headers. |
+| `docs/observability-report.md`, `benchmarks/raw/observability/end_to_end_session.txt` | Phase 7 (see below), listed here since both phases were built and reported together. |
+
+Touched files (all changes marked inline with `// xv6-plus:` comments):
+
+| File | Change |
+|---|---|
+| `Makefile` | Added the four stress binaries to `UPROGS`. |
+| `kernel/param.h` | `FSSIZE` bumped from upstream's 2000 to 20000 blocks -- a real regression, found and fixed during this phase, not a preemptive change. Adding the four stress binaries to `UPROGS` (baked into `fs.img` like every other user program) left too few free blocks for `usertests`' own `writebig` test (needs `MAXFILE`=268 free blocks for one file, `kernel/fs.h`), which failed with `balloc: out of blocks` the first time `usertests` was re-run after this phase's `UPROGS` additions -- see the full account below. Every `mkfs.c` size formula is already computed from `FSSIZE`, so no other file needed a matching change. |
+| `docs/invariants.md` | Updated all eight rows plus "Known, deliberate limitations" with Phase 6 (and Phase 7) evidence. |
+| `tests/stress/README.md` | Updated from "reserved for Phase 6, empty" (written during Phase 0/1) to the real per-program breakdown. |
+| `README.md` | Added the FR7 "Original features" entry and the Phase 7 report entry; updated the roadmap status table, repository layout, and "Verify it yourself" transcript. |
+
+**ABI change:** none -- no new syscall, no `struct xv_pstat` change.
+This phase is pure test/tooling addition (plus the `FSSIZE` capacity
+fix above) against the already-built Phase 1-5 kernel surface.
+
+**Invariants at stake:** all eight, for the first time under genuine
+concurrent multi-hart load rather than sequential exercise -- #1, #3,
+#5 (`stressforkexit.c`'s exact fill-count proof), #2 (audited: no new
+lock, every existing lock-order edge exercised under real contention),
+#4 (`stresssched.c`'s adversarial live-competition policy churn), #6
+(`stressvm.c`'s concurrent exhaustion), #7 (existing syscalls'
+validation under concurrent load, no new surface), #8 (every program
+ends with a plain-shell regression check). See `docs/invariants.md`
+and `docs/stress-testing.md`'s full audit section.
+
+**Lock/lifetime:** no new lock added. The audit's own finding
+(`docs/stress-testing.md`) is that the existing lock-order graph
+(`wait_lock -> p->lock`; leaf `sched_lock`, ADR-0010; leaf `kalloc()`
+freelist lock, upstream) holds under real concurrent pressure from all
+four programs, run repeatably.
+
+**Test:** `tests/stress/test_stress_fork_exit.py`,
+`test_stress_syscalls.py`, `test_stress_scheduler_race.py`,
+`test_stress_vm_pressure.py`. Run via `scripts/run-tests.sh`; verified
+repeatable by running `scripts/run_tests.py --only stress
+--skip-build` three consecutive times against the same build (5/5
+passing each time -- boot smoke test + the 4 stress tests). Also
+re-verified against upstream's own `usertests` regression suite after
+the `FSSIZE` fix below, backed by three raw, committed console
+transcripts under
+[`benchmarks/raw/usertests/`](../benchmarks/raw/usertests/) (full
+precision, `(new-old)/old` convention -- these supersede an earlier
+hand-typed 339.1s/223.5s pair that predated this project's
+raw-artifact discipline and could not be verified against a committed
+source): `usertests` reports `ALL TESTS PASSED` against this tree in
+321.233s
+([`phase6_fssize_fixed.txt`](../benchmarks/raw/usertests/phase6_fssize_fixed.txt))
+vs. a freshly re-measured 184.654s for the pre-Phase-6 tree
+([`phase5_baseline_pre_phase6.txt`](../benchmarks/raw/usertests/phase5_baseline_pre_phase6.txt))
+-- a +73.96% increase ((321.233 - 184.654) / 184.654) that is a
+direct, expected consequence of `FSSIZE` growing exactly 10x, not a
+new problem: `usertests`' own `diskfull`/`outofinodes` tests
+deliberately fill the entire free disk to prove graceful `ENOSPC`
+handling, so they now do roughly 10x the real I/O against the larger
+image (the other ~90 `usertests` cases are unaffected by `FSSIZE`, so
+total runtime scales by less than 10x overall); both still correctly
+report `OK`. See the top-level `README.md`'s "Verify it yourself"
+section for the full captured tail.
+
+**A real regression was introduced by this phase and caught before
+being considered done, the same "required full re-run" discipline
+Phase 4/5's `MAXVAplus` catch (see the followup entry below)
+established:** re-running `usertests` after adding the four stress
+binaries to `UPROGS` (this project's own required verification step
+for any change that grows `fs.img`'s contents) failed at `writebig`
+with `balloc: out of blocks` in 5.045s -- the pinned upstream `FSSIZE`
+(2000 blocks) had just enough free space for the pre-Phase-6 `UPROGS`
+set and no meaningful margin for `usertests`' own scratch-file needs;
+raw transcript:
+[`benchmarks/raw/usertests/phase6_fssize_regression_repro.txt`](../benchmarks/raw/usertests/phase6_fssize_regression_repro.txt).
+Fixed by bumping `FSSIZE` to 20000 (`kernel/param.h`, see that file's
+own comment for the full accounting); confirmed fixed by a clean
+rebuild + fresh `usertests` re-run reporting `ALL TESTS PASSED` in
+321.233s (raw transcript above), not merely inferred from the fix
+being "obviously correct."
+
+**Rollback/debug strategy:** additive and separately identifiable via
+`// xv6-plus:` comments; reverting Phase 6 means removing the four new
+user programs from `UPROGS`, the four new `user/stress*.c`/
+`tests/stress/*.py` files, and the `FSSIZE` bump (which would also
+need reverting together, since `FSSIZE`'s only reason for changing was
+those four programs' disk footprint) -- no kernel control-flow logic
+from Phases 1-5 is touched by this phase, so a revert cannot regress
+any earlier phase's behavior, only remove this phase's own tests and
+capacity headroom.
+
+### Phase 7 (kernel observability report)
+
+New files:
+
+| File | What |
+|---|---|
+| `docs/observability-report.md` | The report itself: a real, captured end-to-end walkthrough (creation, syscalls, scheduling, memory) using `xtrace`/`xvtop`/`xvstat(2)` -- see that document for the full narrative. |
+| `benchmarks/raw/observability/end_to_end_session.txt` | The raw, unedited console transcript every number in the report is copied from. |
+
+Touched files: `README.md` (added the Phase 7 report entry, updated
+the roadmap status table -- shared with the Phase 6 entry above, both
+phases were built and reported in the same pass).
+
+**ABI change:** none. **New kernel or userspace source:** none -- this
+phase is a report over the instrumentation Phases 1-6 already built,
+using only existing, already-tested tools (`xtrace`, `xvtop`, plus
+Phase 4's `schedbench` and Phase 5's `vmfaulttest`) driven through one
+real QEMU session.
+
+**Invariants at stake:** #3, #5, #8 (each directly, visibly
+demonstrated by a live snapshot rather than asserted by a test -- see
+`docs/observability-report.md`'s per-stage commentary tying each
+transcript excerpt back to the specific invariant it shows).
+
+**Test:** the report's own captured session ends with a plain-shell
+regression check (`echo observability_regression_ok`), the same
+pattern every other phase's tests use; this is documentation, not a
+new `tests/<category>/` module (`scripts/run_tests.py`'s own module
+comment already documents why the boot smoke test and this kind of
+one-shot capture live outside that discovery mechanism).
+
+**Rollback/debug strategy:** two new files, both pure documentation;
+removing them regresses nothing (no kernel or userspace source is
+touched by this phase).
+
 ### Phase 4/5 review-fix followup (correctness gaps found by external review)
 
 New files:

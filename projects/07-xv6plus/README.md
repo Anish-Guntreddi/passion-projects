@@ -5,7 +5,7 @@ RISC-V teaching kernel. Portfolio project 07 of 09 (Track D: OS,
 independent of the other projects). Full spec: `07-xv6plus-spec.md`
 (portfolio repo root).
 
-**Status: Phases 0-5 of 9 complete.** This is *not* a finished
+**Status: Phases 0-7 of 9 complete.** This is *not* a finished
 project -- see "Roadmap status" below. Everything claimed here is
 backed by a real, reproducible build and test run in this repo; see
 "Verify it yourself."
@@ -159,8 +159,71 @@ exhaustion + reclaim-on-exit, and a direct (not just inferred)
 isolation) had *none* of before this phase. Full design writeup and
 captured real transcripts: [`docs/vm-extension.md`](docs/vm-extension.md).
 
-Not yet built: stress hardening (Phase 6), an observability report
-(Phase 7), or portfolio polish (Phase 8). The resume narrative in the
+### FR7: Stress/regression test suite (Phase 6)
+
+Four original stress programs (`user/stress*.c`), one per spec Phase 6
+category -- concurrent fork/exit, syscall-heavy, memory-pressure,
+scheduler stress -- each racing genuinely concurrent workloads across
+every hart (this project's QEMU session boots `-smp 3`) against a
+kernel path Phases 1-5 only ever exercised sequentially, plus a
+lock/invariant audit against the existing lock-order graph
+(`wait_lock -> p->lock`, the leaf `sched_lock`, `kalloc()`'s own leaf
+freelist lock). **No kernel control-flow/logic changed and no new
+lock was added** -- this phase is pure test/tooling addition against
+the already-built Phase 1-5 kernel surface, plus one capacity
+constant: `kernel/param.h`'s `FSSIZE` was bumped from upstream's 2000
+to 20000 blocks after a real, caught regression (see the "Verify it
+yourself" section below and `docs/upstream-delta.md`'s Phase 6 entry
+for the full account) -- a build-time size parameter, not a logic
+change, and it touches no control-flow path. A clean pass under real
+concurrent load is the audit's own evidence that the lock-order graph
+established through Phase 5 (ADR-0009/0010/0012) actually holds.
+Verified repeatable: the stress category was run three consecutive
+times against the same build with no change in between (5/5 passing
+each time). Full design writeup and the audit itself:
+[`docs/stress-testing.md`](docs/stress-testing.md).
+
+```
+$ python3 scripts/run_tests.py --only stress --skip-build
+[boot] booting kernel/kernel + fs.img in QEMU ...
+[boot] OK: kernel boots, init starts sh, shell runs commands
+[test] tests/stress/test_stress_fork_exit.py ...
+[test] tests/stress/test_stress_fork_exit.py: PASS
+[test] tests/stress/test_stress_scheduler_race.py ...
+[test] tests/stress/test_stress_scheduler_race.py: PASS
+[test] tests/stress/test_stress_syscalls.py ...
+[test] tests/stress/test_stress_syscalls.py: PASS
+[test] tests/stress/test_stress_vm_pressure.py ...
+[test] tests/stress/test_stress_vm_pressure.py: PASS
+
+============================================================
+xv6-plus test summary: 5/5 passed in 4.2s
+============================================================
+```
+
+(Real transcript from this repo, one of three identical consecutive
+passing runs used to verify repeatability.)
+
+### Kernel observability report (Phase 7)
+
+Not a new feature -- a report, using exactly the tools this project
+already built (`xtrace`, `xvtop`, `xvstat(2)`) to walk a single real,
+captured QEMU session through an end-to-end workload: process
+**creation** (a traced `exec()` into `cat`, observed with `xtrace`),
+**syscalls** (the same trace, showing `open`/`read`/`write`/`close` as
+`cat` streams a real file, including a real, reproduced observation of
+console-write non-atomicity between the kernel's own trace-print calls
+and the traced process's own output), **scheduling** (a backgrounded
+lottery-scheduler competition sampled live, mid-run, through three
+`xvtop` refreshes showing each competitor's `runticks`/`selections`
+climbing in real time), and **memory** (`vmfaulttest`'s pagefault
+telemetry showing lazy growth, first-touch faulting, and no
+double-count on re-touch, as a live before/after snapshot). Full
+report, with every quoted number copied directly from the raw captured
+transcript: [`docs/observability-report.md`](docs/observability-report.md)
+(raw session: [`benchmarks/raw/observability/end_to_end_session.txt`](benchmarks/raw/observability/end_to_end_session.txt)).
+
+Not yet built: portfolio polish (Phase 8). The resume narrative in the
 spec (§1.7) describes the *finished* project and is not claimed here
 yet.
 
@@ -174,8 +237,8 @@ yet.
 | 3 | `xvtop` | Tool visibly reports active processes and resource data | **Done** |
 | 4 | Scheduler experiment | Benchmark compares fairness/turnaround/response vs baseline scheduler | **Done** |
 | 5 | VM extension | Dedicated VM tests + architecture note | **Done** |
-| 6 | Stress/race hardening | -- | Not started |
-| 7 | Kernel observability report | -- | Not started |
+| 6 | Stress/race hardening | Repeated stress suite passes | **Done** |
+| 7 | Kernel observability report | Report committed | **Done** |
 | 8 | Portfolio hardening | -- | Not started |
 
 ## Repository layout
@@ -189,6 +252,8 @@ docs/accounting.md           Phase 2 design writeup
 docs/xvtop.md                Phase 3 design writeup
 docs/scheduler.md            Phase 4 design writeup
 docs/vm-extension.md         Phase 5 design writeup
+docs/stress-testing.md       Phase 6 design writeup + lock/invariant audit
+docs/observability-report.md Phase 7 end-to-end observability report
 docs/invariants.md           the 8 core invariants (spec §1.5) and their status per phase
 docs/toolchain.md            verified toolchain versions, build/debug/test workflow
 scripts/run-tests.sh         build + run the full suite (thin wrapper)
@@ -199,8 +264,9 @@ tests/accounting/             Phase 2 process-accounting tests
 tests/xvtop/                  Phase 3 xvtop tests
 tests/scheduler/              Phase 4 scheduler-experiment tests
 tests/vm/                     Phase 5 VM-extension tests
-tests/stress/                 reserved for Phase 6 (see tests/stress/README.md)
-benchmarks/raw/, benchmarks/methodology.md   Phase 4 scheduler-fairness benchmark: raw captured output + analysis
+tests/stress/                 Phase 6 stress/race-hardening tests (see tests/stress/README.md)
+benchmarks/raw/scheduler/, benchmarks/methodology.md   Phase 4 scheduler-fairness benchmark: raw captured output + analysis
+benchmarks/raw/observability/  Phase 7 raw captured end-to-end session transcript
 ```
 
 ## Verify it yourself
@@ -244,6 +310,14 @@ kernel/kernel fs.img`, then the full suite):
 [test] tests/scheduler/test_settickets_validation.py: PASS
 [test] tests/scheduler/test_tickets_lifecycle.py ...
 [test] tests/scheduler/test_tickets_lifecycle.py: PASS
+[test] tests/stress/test_stress_fork_exit.py ...
+[test] tests/stress/test_stress_fork_exit.py: PASS
+[test] tests/stress/test_stress_scheduler_race.py ...
+[test] tests/stress/test_stress_scheduler_race.py: PASS
+[test] tests/stress/test_stress_syscalls.py ...
+[test] tests/stress/test_stress_syscalls.py: PASS
+[test] tests/stress/test_stress_vm_pressure.py ...
+[test] tests/stress/test_stress_vm_pressure.py: PASS
 [test] tests/syscall/test_no_regression.py ...
 [test] tests/syscall/test_no_regression.py: PASS
 [test] tests/syscall/test_trace_basic.py ...
@@ -274,7 +348,7 @@ kernel/kernel fs.img`, then the full suite):
 [test] tests/xvtop/test_xvtop_zombie_filtered.py: PASS
 
 ============================================================
-xv6-plus test summary: 27/27 passed in 19.4s
+xv6-plus test summary: 31/31 passed in 23.3s
   [PASS] boot smoke test
   [PASS] tests/accounting/test_exec_preserves_counters.py
   [PASS] tests/accounting/test_fork_fresh_counters.py
@@ -288,6 +362,10 @@ xv6-plus test summary: 27/27 passed in 19.4s
   [PASS] tests/scheduler/test_schedpolicy_validation.py
   [PASS] tests/scheduler/test_settickets_validation.py
   [PASS] tests/scheduler/test_tickets_lifecycle.py
+  [PASS] tests/stress/test_stress_fork_exit.py
+  [PASS] tests/stress/test_stress_scheduler_race.py
+  [PASS] tests/stress/test_stress_syscalls.py
+  [PASS] tests/stress/test_stress_vm_pressure.py
   [PASS] tests/syscall/test_no_regression.py
   [PASS] tests/syscall/test_trace_basic.py
   [PASS] tests/syscall/test_trace_fork_inheritance.py
@@ -305,18 +383,69 @@ xv6-plus test summary: 27/27 passed in 19.4s
 ============================================================
 ```
 
+(31/31 = the boot smoke test plus 30 test modules -- 4 more than the
+27/27 shown for Phase 5, exactly the 4 new `tests/stress/` modules.)
+
 Also verified manually against upstream's own `usertests` regression
 suite (not part of the automated harness above -- it takes several
 minutes and is a stock upstream program, not an xv6-plus feature under
-test): `usertests` reports `ALL TESTS PASSED` against this tree in
-223.5s (re-run against this exact tree during review followup, after
-the `MAXVAplus` regression fix below -- runtime varies a little
-run-to-run with host/QEMU load, an earlier run of the pre-followup
-tree measured 198.7s), with all seven Phase 2/4/5 telemetry fields and
-their locking live on every process throughout, and (Phase 5)
-`usertests`' own `lazytests` group exercising the exact `vmfault()`
-memory-exhaustion
-path this project instruments and hardened the diagnostics for.
+test), with every number below recomputed directly from three raw,
+committed console transcripts under
+[`benchmarks/raw/usertests/`](benchmarks/raw/usertests/) (full
+precision, `(new-old)/old` convention where a percentage is stated --
+these supersede an earlier hand-typed 339.1s/223.5s pair that this
+project's own raw-artifact discipline could not verify and has since
+replaced):
+
+- **Regression, reproduced** ([`phase6_fssize_regression_repro.txt`](benchmarks/raw/usertests/phase6_fssize_regression_repro.txt)):
+  rebuilding this phase's four stress binaries into `UPROGS` with the
+  pinned upstream `FSSIZE` (2000) still in place makes `usertests` fail
+  in 5.045s at `writebig` with `balloc: out of blocks` -- `SOME TESTS
+  FAILED`, the real regression this phase's `FSSIZE` fix (below)
+  addresses, not a hypothetical one.
+- **Pre-Phase-6 baseline, re-measured** ([`phase5_baseline_pre_phase6.txt`](benchmarks/raw/usertests/phase5_baseline_pre_phase6.txt)):
+  the pre-Phase-6 tree (`UPROGS` without the four stress binaries,
+  `FSSIZE` 2000) reports `ALL TESTS PASSED` in 184.654s.
+- **Post-fix**, this exact tree ([`phase6_fssize_fixed.txt`](benchmarks/raw/usertests/phase6_fssize_fixed.txt)):
+  with `FSSIZE` bumped to 20000 and the four stress binaries in
+  `UPROGS`, `usertests` reports `ALL TESTS PASSED` in 321.233s -- a
+  +73.96% increase over the 184.654s baseline above ((321.233 -
+  184.654) / 184.654), and a direct, expected consequence of that same
+  `FSSIZE` fix, not a new regression: `usertests`' own
+  `diskfull`/`outofinodes` tests deliberately fill the *entire* free
+  disk to prove graceful `ENOSPC` handling (both correctly report `OK`
+  in the tail below, `balloc: out of blocks`/`ialloc: no inodes` being
+  their own expected, intentional output, not a failure), and `FSSIZE`
+  growing exactly 10x means those two tests alone now perform roughly
+  10x the real disk I/O they did against the smaller pre-Phase-6 image
+  -- the work itself is unchanged, only its size is (the other ~90
+  `usertests` cases are unaffected by `FSSIZE`, so total runtime scales
+  by less than 10x overall; wall time also varies some run-to-run with
+  host/QEMU load regardless of `FSSIZE`).
+
+All seven Phase 2/4/5 telemetry fields and their locking are live on
+every process throughout, and (Phase 5) `usertests`' own `lazytests`
+group exercises the exact `vmfault()` memory-exhaustion path this
+project instruments and hardened the diagnostics for. Real captured
+tail from the post-fix run
+([`phase6_fssize_fixed.txt`](benchmarks/raw/usertests/phase6_fssize_fixed.txt)):
+
+```
+test lazy_copy: OK
+usertests slow tests starting
+test bigdir: OK
+test manywrites: OK
+test badwrite: OK
+test execout: OK
+test diskfull: balloc: out of blocks
+ialloc: no inodes
+ialloc: no inodes
+OK
+test outofinodes: ialloc: no inodes
+OK
+ALL TESTS PASSED
+$
+```
 
 To boot interactively instead: `make qemu` (quit with the QEMU
 monitor escape, Ctrl-A x). To debug with gdb: `make qemu-gdb` in one

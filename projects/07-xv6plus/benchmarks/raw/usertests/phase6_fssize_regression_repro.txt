@@ -1,0 +1,25 @@
+# label: phase6_UPROGS_with_stress_bins_FSSIZE_2000_regression_repro
+# command: usertests
+# captured: 2026-08-17T23:07:20.609225+00:00
+# wall_elapsed_seconds: 5.045
+usertests
+usertests starting
+test copyin: OK
+test copyout: OK
+test copyinstr1: OK
+test copyinstr2: OK
+test copyinstr3: OK
+test rwsbrk: OK
+test truncate1: OK
+test truncate2: OK
+test truncate3: OK
+test openiput: OK
+test exitiput: OK
+test iput: OK
+test opentest: OK
+test writetest: OK
+test writebig: balloc: out of blocks
+writebig: error: write big file failed i=193
+FAILED
+SOME TESTS FAILED
+$ 
