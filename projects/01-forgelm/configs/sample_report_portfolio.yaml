@@ -1,0 +1,30 @@
+# Example config for `forgelm sample-report --config configs/sample_report_portfolio.yaml`
+# (Phase 6). Fields map 1:1 to forgelm.config.SampleReportConfig.
+#
+# Identical to configs/sample_report_example.yaml except `output_path`:
+# this one writes into `benchmarks/sample_generations/`, which is
+# *not* gitignored (unlike `artifacts/`), so its output is committed as
+# the "sample generations with documented decoding settings" portfolio
+# deliverable (spec §1.6) -- real output from this project's own trained
+# checkpoint, not hand-edited or invented text.
+#
+# Run these first to produce the checkpoint this config points at:
+#   forgelm tokenizer train --config configs/tokenizer_train.yaml
+#   forgelm dataset build --config configs/dataset_build.yaml
+#   forgelm train --config configs/train_toy.yaml
+checkpoint_path: artifacts/checkpoints/final.pt
+tokenizer_path: artifacts/tokenizer.json
+output_path: benchmarks/sample_generations/toy_sample_report
+val_tokens_path: artifacts/dataset/val_tokens.npy
+prompts:
+  - "Alice was beginning to"
+  - "The Queen of Hearts"
+  - "Down the rabbit-hole"
+generation:
+  max_new_tokens: 40
+  temperature: 0.8
+  top_k: 40
+  do_sample: true
+  seed: 1337
+eval_batch_size: 8
+device: cpu

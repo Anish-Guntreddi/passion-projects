@@ -64,11 +64,20 @@ model, without needing a larger download.
   params vs. memory, tokens trained vs. val loss) without training
   anything resembling a production model.
 - **The RTX 4090 makes this budget generous, not tight.** Phase 0–3's
-  `configs/train_toy.yaml` (d_model=64, 50 steps) already trains in ~40s
-  on this GPU. Even the `larger` config here (6.4M params, ~5.7x the toy
+  `configs/train_toy.yaml` (d_model=64, 50 steps) trains fast — well under
+  a minute. Even the `larger` config here (6.4M params, ~5.7x the toy
   config's `larger`-relative size) at a few hundred steps is expected to
   finish in well under a minute — the ~1 hour ceiling is a safety margin
   against the *sum* of every sweep point, not a target to spend.
+  *(Correction, Phase 6: this bullet originally cited a specific "~40s on
+  this GPU" figure for the toy config as part of this rationale, which a
+  Phase 6 fresh-clone re-measurement showed was inaccurate on two counts —
+  the toy config runs on `device: cpu`, not the GPU, and the real
+  wall-clock is ~2.4s, not ~40s. Left as a corrected figure-free statement
+  here rather than silently rewritten, since the qualitative conclusion
+  this bullet supports — "generous, not tight" — holds even more strongly
+  at the corrected, faster number; see `docs/reproducibility.md`'s
+  "Fresh-clone verification" section for the measured value.)*
 - **Consistent with the project's existing "toy-to-small" posture.**
   Phases 0–3 already established that CPU-testable correctness and a
   GPU-accelerated but small real run are the project's operating mode

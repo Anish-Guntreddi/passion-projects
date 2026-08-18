@@ -147,8 +147,9 @@ memory — again sub-linear, for the same fixed-parameter/optimizer-state
 reason as above. Tokens/sec scales up substantially faster than memory as
 batch size grows (14.9x, 4→64), showing this toy-scale model is
 comfortably launch-overhead-bound, not memory- or compute-bound, at every
-batch size tested here — all five points used well under 1% of the RTX
-4090's 24 GB.
+batch size tested here — all five points used well under 2% of the RTX
+4090's 24 GB (highest: 1.77% at micro_batch_size=64; peak_memory_bytes /
+gpu_total_memory_bytes from `benchmarks/results/batch_size_64.json`).
 
 ![peak memory vs batch size](plots/peak_memory_vs_batch_size.png)
 

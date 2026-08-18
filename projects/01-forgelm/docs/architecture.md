@@ -1,9 +1,9 @@
 # Architecture
 
-Status: reflects Phases 0–5 (repo foundation, tokenization/data,
-Transformer architecture, training system, generation/evaluation, scaling
-experiments). Phase 6 (portfolio hardening: polished README/diagrams,
-release tag) is not yet implemented.
+Status: reflects Phases 0–6 (repo foundation; tokenization/data;
+Transformer architecture; training system; generation/evaluation; scaling
+experiments; portfolio hardening) — the full MVP roadmap in
+`01-forgelm-spec.md` Part 3.
 
 ## Module boundaries
 
@@ -23,6 +23,68 @@ a runtime dependency-checker:
 | `forgelm.cli` | composes the above into `typer` commands | any of the above modules' actual logic — CLI code only builds configs, calls a library function, and prints the result |
 | `forgelm.config` | typed dataclasses + YAML loader, used by every other module | — |
 | `forgelm.seed` | global RNG seeding | — |
+
+## Forward pass (Phase 2 architecture)
+
+The full decoder-only Transformer forward pass, `n_layers` blocks deep,
+built entirely from the modules in `forgelm.model` (no
+`transformers`-library model class anywhere). Full formulas for every
+box below: `docs/model-math.md`.
+
+```mermaid
+flowchart TD
+    A["token_ids (B, T)"] --> B["token_embedding\nnn.Embedding(vocab_size, d_model)"]
+    B --> C["x0 = embeddings (B, T, d_model)"]
+    C --> D["RMSNorm (attn_norm)"]
+    D --> E["CausalSelfAttention\nqkv_proj -> split heads -> RoPE(q,k)\n-> scaled dot-product -> causal mask\n-> softmax -> merge heads -> out_proj"]
+    E --> F["x1 = x0 + attn_out"]
+    F --> G["RMSNorm (mlp_norm)"]
+    G --> H["SwiGLU MLP\ndown_proj(SiLU(gate_proj(x)) * up_proj(x))"]
+    H --> I["x2 = x1 + mlp_out"]
+    I -->|"repeat this block n_layers times\n(x2 becomes the next block's x0)"| D
+    I --> J["final_norm (RMSNorm)"]
+    J --> K["output_proj\n(tied to token_embedding.weight, D4)"]
+    K --> L["logits (B, T, vocab_size)"]
+```
+
+Every block shares one precomputed `(cos, sin)` RoPE angle table
+(`precompute_rope_angles`, a pure function of `head_dim`,
+`context_length`, `rope_theta`), sliced to the current sequence length —
+RoPE is applied fresh to `q`/`k` inside every block's attention, not
+added once at the embedding layer.
+
+## Training loop (Phase 3 system)
+
+One `Trainer.train_step()` call (`forgelm.training.loop`) — everything
+FR6/FR7 ask for (AdamW, LR schedule, grad clipping, grad accumulation,
+mixed precision, checkpointing) composed in one place:
+
+```mermaid
+flowchart TD
+    A["next(batch_iter)\n(x, y) -- pure fn of (dataset, batch_size, seed)"] --> B["autocast\n(bf16 on CUDA if supported, else fp32 -- D6)"]
+    B --> C["model(x) -> logits"]
+    C --> D["cross_entropy(logits, y)"]
+    D --> E["(loss / grad_accum_steps).backward()"]
+    E -->|"repeat grad_accum_steps times"| A
+    E --> F["clip_grad_norm_(params, grad_clip_norm)"]
+    F --> G["optimizer.step() -- AdamW,\ndecay / no-decay param groups"]
+    G --> H["scheduler.step() -- linear warmup\n+ cosine decay"]
+    H --> I["step += 1"]
+    I -->|"every eval_interval steps"| J["Trainer.evaluate()\n(eval mode, no_grad, fixed seed=0)"]
+    I -->|"periodically / at run end"| K["save_checkpoint()\nmodel + optimizer + scheduler + RNG state\n+ config_hash (D7, ADR 0009)"]
+```
+
+Resuming (`Trainer.load_checkpoint`) reverses the right-hand side: verify
+`config_hash` against the current `model_config`/`training_config`/
+`dataset_paths` (loud failure on any mismatch, not a silent resume onto
+the wrong run), restore model/optimizer/scheduler state and all four
+seeded RNGs, then re-derive the batch iterator at the exact
+`step * grad_accum_steps`-th micro-batch — `iter_batches` being a pure
+function of `(dataset, batch_size, seed)` means no separate iterator
+state needs to be persisted at all. This is the Phase 3 exit criterion:
+an interrupted-and-resumed run reproduces the uninterrupted run's
+per-step losses within tolerance
+(`tests/integration/test_checkpoint_resume.py`).
 
 ## Phase 0–1 data flow
 

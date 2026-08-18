@@ -1,0 +1,62 @@
+{
+  "checkpoint_path": "artifacts/checkpoints/final.pt",
+  "eval_result": {
+    "loss": 5.512617644900151,
+    "num_batches": 1050,
+    "perplexity": 247.79892844204278,
+    "tokens_evaluated": 537280
+  },
+  "model_config": {
+    "context_length": 64,
+    "d_ff": 256,
+    "d_model": 64,
+    "dropout": 0.0,
+    "dtype": "float32",
+    "n_heads": 4,
+    "n_kv_heads": null,
+    "n_layers": 2,
+    "rmsnorm_eps": 1e-06,
+    "rope_theta": 10000.0,
+    "tie_weights": true,
+    "vocab_size": 512
+  },
+  "samples": [
+    {
+      "generated_text": "Alice was beginning toas_ asath\u201chanthewasbeptoandwasased ccstantoangdwasaningallgsobe_edp,saiding",
+      "prompt": "Alice was beginning to",
+      "settings": {
+        "do_sample": true,
+        "max_new_tokens": 40,
+        "seed": 1337,
+        "temperature": 0.8,
+        "top_k": 40,
+        "top_p": null
+      }
+    },
+    {
+      "generated_text": "The Queen of Heartsofin\u201cinstnhsaidit pistgasanlyhofsaidandinaniinshehhcc p\naaallthe \nh",
+      "prompt": "The Queen of Hearts",
+      "settings": {
+        "do_sample": true,
+        "max_new_tokens": 40,
+        "seed": 1338,
+        "temperature": 0.8,
+        "top_k": 40,
+        "top_p": null
+      }
+    },
+    {
+      "generated_text": "Down the rabbit-hole.pl__totocatwasating,\u201dsaid_edtoanananshectoofAlice\nAlice,  nshetoasn\nbeandst",
+      "prompt": "Down the rabbit-hole",
+      "settings": {
+        "do_sample": true,
+        "max_new_tokens": 40,
+        "seed": 1339,
+        "temperature": 0.8,
+        "top_k": 40,
+        "top_p": null
+      }
+    }
+  ],
+  "step": 50
+}
