@@ -1,0 +1,38 @@
+{
+  "description": "Phase 4/5 sweep: v0_reference vs v1_naive vs v2_tiled vs v3_online_softmax vs v4_fused, one sequence-length sweep at a fixed representative (B=1, H=8, D=64) shape, causal, S in [128, 512, 1024, 2048, 4096] -- the same L2-crossing range benchmarks/configs/memory_accounting.json and tiled_comparison.json already establish v0/v1/v2's baseline over, so this sweep's numbers are directly comparable point-for-point, extended with the two new variants. measure_peak_memory=true (ADR 0010) additionally records one untimed torch.cuda.max_memory_allocated() forward call per point -- this is what makes Phase 5's 'peak-memory scales as designed' exit criterion, and spec SS1.6's peak-memory-vs-sequence-length plot, computable from this committed sweep: v0/v1/v2/v3 all materialize a [B,H,S,S] scores buffer (of decreasing per-call latency cost as the softmax/QK^T algorithm improves, but NOT decreasing memory-footprint cost -- all four still allocate the same O(S^2) buffer), while v4 allocates none. Every point is correctness-checked against v0_reference before it is timed. Run by scripts/run_benchmarks.py --config benchmarks/configs/phase4_5_comparison.json; results append to the same benchmarks/raw/attention.jsonl.",
+  "seed": 123456789,
+  "warmup_iters": 5,
+  "measured_reps": 20,
+  "measure_peak_memory": true,
+  "points": [
+    { "variant": "reference",       "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "naive",           "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "tiled",           "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "online_softmax",  "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+    { "variant": "fused",           "batch": 1, "heads": 8, "seq_len": 128,  "head_dim": 64, "causal": true },
+
+    { "variant": "reference",       "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "naive",           "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "tiled",           "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "online_softmax",  "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+    { "variant": "fused",           "batch": 1, "heads": 8, "seq_len": 512,  "head_dim": 64, "causal": true },
+
+    { "variant": "reference",       "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "naive",           "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "tiled",           "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "online_softmax",  "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+    { "variant": "fused",           "batch": 1, "heads": 8, "seq_len": 1024, "head_dim": 64, "causal": true },
+
+    { "variant": "reference",       "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "naive",           "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "tiled",           "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "online_softmax",  "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+    { "variant": "fused",           "batch": 1, "heads": 8, "seq_len": 2048, "head_dim": 64, "causal": true },
+
+    { "variant": "reference",       "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": true },
+    { "variant": "naive",           "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": true },
+    { "variant": "tiled",           "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": true },
+    { "variant": "online_softmax",  "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": true },
+    { "variant": "fused",           "batch": 1, "heads": 8, "seq_len": 4096, "head_dim": 64, "causal": true }
+  ]
+}
