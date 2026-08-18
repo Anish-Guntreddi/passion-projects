@@ -1,0 +1,25 @@
+Generating SQLite file profiling/nsight-systems/02-reduction-v2-sequential.sqlite from profiling/nsight-systems/02-reduction-v2-sequential.nsys-rep
+Processing [profiling/nsight-systems/02-reduction-v2-sequential.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/cuda_gpu_kern_sum.py]... 
+SKIPPED: profiling/nsight-systems/02-reduction-v2-sequential.sqlite does not contain CUDA kernel data.
+
+Processing [profiling/nsight-systems/02-reduction-v2-sequential.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/cuda_gpu_mem_time_sum.py]... 
+SKIPPED: profiling/nsight-systems/02-reduction-v2-sequential.sqlite does not contain GPU memory data.
+
+Processing [profiling/nsight-systems/02-reduction-v2-sequential.sqlite] with [/opt/nvidia/nsight-systems/2024.5.1/host-linux-x64/reports/cuda_api_sum.py]... 
+
+ ** CUDA API Summary (cuda_api_sum):
+
+ Time (%)  Total Time (ns)  Num Calls   Avg (ns)    Med (ns)   Min (ns)  Max (ns)   StdDev (ns)           Name         
+ --------  ---------------  ---------  ----------  ----------  --------  ---------  -----------  ----------------------
+     62.6        109068479          4  27267119.8    555662.5    234297  107722857   53638008.3  cudaMalloc            
+     24.8         43174116          3  14391372.0  21525627.0     38027   21610462   12430433.8  cudaMemcpy            
+      8.1         14041450         31    452950.0    422456.0    410042     904866     107943.3  cudaEventSynchronize  
+      2.5          4338216         10    433821.6    424648.0    418252     518172      29938.2  cudaDeviceSynchronize 
+      1.4          2466423          4    616605.8    612691.0    138172    1102869     547093.5  cudaFree              
+      0.2           427625         41     10429.9      4627.0      3101     161170      24720.4  cudaLaunchKernel      
+      0.2           308371         41      7521.2      4146.0      2819      22993       6193.3  cudaMemsetAsync       
+      0.1           243715         62      3930.9      2820.0      1422      29533       3985.2  cudaEventRecord       
+      0.0            59936         62       966.7       468.5       228      11582       1730.5  cudaEventCreate       
+      0.0            29726         62       479.5       354.0       186       2939        421.7  cudaEventDestroy      
+      0.0              410          1       410.0       410.0       410        410          0.0  cuModuleGetLoadingMode
+

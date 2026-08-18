@@ -1,0 +1,789 @@
+
+Fatbin ptx code:
+================
+arch = sm_89
+code version = [8,5]
+host = linux
+compile_size = 64bit
+compressed
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/common/device_query.cu
+ptxasOptions =  --generate-line-info 
+
+//
+//
+//
+//
+//
+//
+
+.version 8.5
+.target sm_89
+.address_size 64
+
+
+
+
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/common/device_query.cu
+
+Fatbin ptx code:
+================
+arch = sm_89
+code version = [8,5]
+host = linux
+compile_size = 64bit
+compressed
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_naive_global.cu
+ptxasOptions =  --generate-line-info 
+
+//
+//
+//
+//
+//
+//
+
+.version 8.5
+.target sm_89
+.address_size 64
+
+
+.entry _ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm(
+.param .u64 _ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm_param_0,
+.param .u64 _ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm_param_1,
+.param .u64 _ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm_param_2
+)
+{
+.reg .pred %p<2>;
+.reg .f32 %f<3>;
+.reg .b32 %r<4>;
+.reg .b64 %rd<11>;
+.loc	1 15 0
+
+
+ld.param.u64 %rd2, [_ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm_param_0];
+ld.param.u64 %rd3, [_ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm_param_1];
+ld.param.u64 %rd4, [_ZN11kernelforge7kernels55_GLOBAL__N__f7cb1c49_22_reduce_naive_global_cu_1dc4d01f26reduce_naive_global_kernelEPKfPfm_param_2];
+.loc	1 17 3
+mov.u32 %r1, %ctaid.x;
+mov.u32 %r2, %ntid.x;
+mul.wide.u32 %rd5, %r1, %r2;
+mov.u32 %r3, %tid.x;
+cvt.u64.u32 %rd6, %r3;
+add.s64 %rd1, %rd5, %rd6;
+.loc	1 18 3
+setp.ge.u64 %p1, %rd1, %rd4;
+@%p1 bra $L__BB0_2;
+
+.loc	1 17 3
+cvta.to.global.u64 %rd7, %rd2;
+.loc	1 19 5
+shl.b64 %rd8, %rd1, 2;
+add.s64 %rd9, %rd7, %rd8;
+ld.global.nc.f32 %f1, [%rd9];
+.loc	1 17 3
+cvta.to.global.u64 %rd10, %rd3;
+.loc	1 19 5
+.loc	2 84 3, function_name $L__info_string0, inlined_at 1 19 5
+atom.global.add.f32 %f2, [%rd10], %f1;
+
+$L__BB0_2:
+.loc	1 21 1
+ret;
+
+}
+.file	1 "/mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_naive_global.cu"
+.file	2 "/usr/local/cuda/targets/x86_64-linux/include/sm_20_atomic_functions.hpp"
+.section	.debug_str
+{
+$L__info_string0:
+.b8 95,90,78,53,51,95,73,78,84,69,82,78,65,76,95,102,55,99,98,49,99,52,57,95,50,50,95,114,101,100,117,99,101,95,110,97,105,118,101,95
+.b8 103,108,111,98,97,108,95,99,117,95,49,100,99,52,100,48,49,102,57,97,116,111,109,105,99,65,100,100,69,80,102,102,0
+
+}
+
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_naive_global.cu
+
+Fatbin ptx code:
+================
+arch = sm_89
+code version = [8,5]
+host = linux
+compile_size = 64bit
+compressed
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_naive_interleaved.cu
+ptxasOptions =  --generate-line-info 
+
+//
+//
+//
+//
+//
+//
+
+.version 8.5
+.target sm_89
+.address_size 64
+
+.extern .shared .align 16 .b8 _ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac6759695sdataE[];
+
+.entry _ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm(
+.param .u64 _ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm_param_0,
+.param .u64 _ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm_param_1,
+.param .u64 _ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm_param_2
+)
+{
+.reg .pred %p<8>;
+.reg .f32 %f<10>;
+.reg .b32 %r<15>;
+.reg .b64 %rd<11>;
+.loc	1 11 0
+
+
+ld.param.u64 %rd2, [_ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm_param_0];
+ld.param.u64 %rd3, [_ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm_param_1];
+ld.param.u64 %rd4, [_ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac67596931reduce_naive_interleaved_kernelEPKfPfm_param_2];
+.loc	1 15 3
+mov.u32 %r6, %ctaid.x;
+mov.u32 %r1, %ntid.x;
+mul.wide.u32 %rd5, %r6, %r1;
+.loc	1 14 3
+mov.u32 %r2, %tid.x;
+.loc	1 15 3
+cvt.u64.u32 %rd6, %r2;
+add.s64 %rd1, %rd5, %rd6;
+.loc	1 16 3
+setp.ge.u64 %p1, %rd1, %rd4;
+mov.f32 %f9, 0f00000000;
+@%p1 bra $L__BB0_2;
+
+.loc	1 14 3
+cvta.to.global.u64 %rd7, %rd2;
+.loc	1 16 3
+shl.b64 %rd8, %rd1, 2;
+add.s64 %rd9, %rd7, %rd8;
+ld.global.nc.f32 %f9, [%rd9];
+
+$L__BB0_2:
+shl.b32 %r7, %r2, 2;
+mov.u32 %r8, _ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac6759695sdataE;
+add.s32 %r3, %r8, %r7;
+st.shared.f32 [%r3], %f9;
+.loc	1 17 3
+bar.sync 0;
+.loc	1 21 3
+setp.lt.u32 %p2, %r1, 2;
+@%p2 bra $L__BB0_7;
+
+.loc	1 0 3
+mov.u32 %r14, 1;
+
+$L__BB0_4:
+.loc	1 22 5
+shl.b32 %r5, %r14, 1;
+rem.u32 %r10, %r2, %r5;
+setp.ne.s32 %p3, %r10, 0;
+add.s32 %r11, %r14, %r2;
+setp.ge.u32 %p4, %r11, %r1;
+or.pred %p5, %p4, %p3;
+@%p5 bra $L__BB0_6;
+
+.loc	1 23 7
+shl.b32 %r12, %r14, 2;
+add.s32 %r13, %r3, %r12;
+ld.shared.f32 %f4, [%r3];
+ld.shared.f32 %f5, [%r13];
+add.f32 %f6, %f5, %f4;
+st.shared.f32 [%r3], %f6;
+
+$L__BB0_6:
+.loc	1 25 5
+bar.sync 0;
+.loc	1 21 3
+setp.lt.u32 %p6, %r5, %r1;
+mov.u32 %r14, %r5;
+@%p6 bra $L__BB0_4;
+
+$L__BB0_7:
+.loc	1 28 3
+setp.ne.s32 %p7, %r2, 0;
+@%p7 bra $L__BB0_9;
+
+.loc	1 29 5
+ld.shared.f32 %f7, [_ZN11kernelforge7kernels60_GLOBAL__N__a0e05ee0_27_reduce_naive_interleaved_cu_ac6759695sdataE];
+.loc	1 14 3
+cvta.to.global.u64 %rd10, %rd3;
+.loc	1 29 5
+.loc	2 84 3, function_name $L__info_string0, inlined_at 1 29 5
+atom.global.add.f32 %f8, [%rd10], %f7;
+
+$L__BB0_9:
+.loc	1 31 1
+ret;
+
+}
+.file	1 "/mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_naive_interleaved.cu"
+.file	2 "/usr/local/cuda/targets/x86_64-linux/include/sm_20_atomic_functions.hpp"
+.section	.debug_str
+{
+$L__info_string0:
+.b8 95,90,78,53,56,95,73,78,84,69,82,78,65,76,95,97,48,101,48,53,101,101,48,95,50,55,95,114,101,100,117,99,101,95,110,97,105,118,101,95
+.b8 105,110,116,101,114,108,101,97,118,101,100,95,99,117,95,97,99,54,55,53,57,54,57,57,97,116,111,109,105,99,65,100,100,69,80,102,102,0
+
+}
+
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_naive_interleaved.cu
+
+Fatbin ptx code:
+================
+arch = sm_89
+code version = [8,5]
+host = linux
+compile_size = 64bit
+compressed
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_sequential_addressing.cu
+ptxasOptions =  --generate-line-info 
+
+//
+//
+//
+//
+//
+//
+
+.version 8.5
+.target sm_89
+.address_size 64
+
+.extern .shared .align 16 .b8 _ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb5sdataE[];
+
+.entry _ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm(
+.param .u64 _ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm_param_0,
+.param .u64 _ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm_param_1,
+.param .u64 _ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm_param_2
+)
+{
+.reg .pred %p<6>;
+.reg .f32 %f<10>;
+.reg .b32 %r<13>;
+.reg .b64 %rd<11>;
+.loc	1 11 0
+
+
+ld.param.u64 %rd2, [_ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm_param_0];
+ld.param.u64 %rd3, [_ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm_param_1];
+ld.param.u64 %rd4, [_ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb35reduce_sequential_addressing_kernelEPKfPfm_param_2];
+.loc	1 15 3
+mov.u32 %r7, %ctaid.x;
+mov.u32 %r1, %ntid.x;
+mul.wide.u32 %rd5, %r7, %r1;
+.loc	1 14 3
+mov.u32 %r2, %tid.x;
+.loc	1 15 3
+cvt.u64.u32 %rd6, %r2;
+add.s64 %rd1, %rd5, %rd6;
+.loc	1 16 3
+setp.ge.u64 %p1, %rd1, %rd4;
+mov.f32 %f9, 0f00000000;
+@%p1 bra $L__BB0_2;
+
+.loc	1 14 3
+cvta.to.global.u64 %rd7, %rd2;
+.loc	1 16 3
+shl.b64 %rd8, %rd1, 2;
+add.s64 %rd9, %rd7, %rd8;
+ld.global.nc.f32 %f9, [%rd9];
+
+$L__BB0_2:
+shl.b32 %r8, %r2, 2;
+mov.u32 %r9, _ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb5sdataE;
+add.s32 %r3, %r9, %r8;
+st.shared.f32 [%r3], %f9;
+.loc	1 17 3
+bar.sync 0;
+.loc	1 22 3
+shr.u32 %r12, %r1, 1;
+setp.eq.s32 %p2, %r12, 0;
+@%p2 bra $L__BB0_6;
+
+$L__BB0_3:
+.loc	1 23 5
+setp.ge.u32 %p3, %r2, %r12;
+@%p3 bra $L__BB0_5;
+
+.loc	1 24 7
+shl.b32 %r10, %r12, 2;
+add.s32 %r11, %r3, %r10;
+ld.shared.f32 %f4, [%r3];
+ld.shared.f32 %f5, [%r11];
+add.f32 %f6, %f5, %f4;
+st.shared.f32 [%r3], %f6;
+
+$L__BB0_5:
+.loc	1 26 5
+bar.sync 0;
+.loc	1 22 3
+shr.u32 %r12, %r12, 1;
+setp.ne.s32 %p4, %r12, 0;
+@%p4 bra $L__BB0_3;
+
+$L__BB0_6:
+.loc	1 29 3
+setp.ne.s32 %p5, %r2, 0;
+@%p5 bra $L__BB0_8;
+
+.loc	1 30 5
+ld.shared.f32 %f7, [_ZN11kernelforge7kernels64_GLOBAL__N__6451e8d4_31_reduce_sequential_addressing_cu_31f163fb5sdataE];
+.loc	1 14 3
+cvta.to.global.u64 %rd10, %rd3;
+.loc	1 30 5
+.loc	2 84 3, function_name $L__info_string0, inlined_at 1 30 5
+atom.global.add.f32 %f8, [%rd10], %f7;
+
+$L__BB0_8:
+.loc	1 32 1
+ret;
+
+}
+.file	1 "/mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_sequential_addressing.cu"
+.file	2 "/usr/local/cuda/targets/x86_64-linux/include/sm_20_atomic_functions.hpp"
+.section	.debug_str
+{
+$L__info_string0:
+.b8 95,90,78,54,50,95,73,78,84,69,82,78,65,76,95,54,52,53,49,101,56,100,52,95,51,49,95,114,101,100,117,99,101,95,115,101,113,117,101,110
+.b8 116,105,97,108,95,97,100,100,114,101,115,115,105,110,103,95,99,117,95,51,49,102,49,54,51,102,98,57,97,116,111,109,105,99,65,100,100,69,80,102
+.b8 102,0
+
+}
+
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_sequential_addressing.cu
+
+Fatbin ptx code:
+================
+arch = sm_89
+code version = [8,5]
+host = linux
+compile_size = 64bit
+compressed
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_warp_shuffle.cu
+ptxasOptions =  --generate-line-info 
+
+//
+//
+//
+//
+//
+//
+
+.version 8.5
+.target sm_89
+.address_size 64
+
+.extern .shared .align 16 .b8 _ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d5sdataE[];
+
+.entry _ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm(
+.param .u64 _ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm_param_0,
+.param .u64 _ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm_param_1,
+.param .u64 _ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm_param_2
+)
+{
+.reg .pred %p<12>;
+.reg .f32 %f<20>;
+.reg .b32 %r<29>;
+.reg .b64 %rd<11>;
+.loc	1 11 0
+
+
+ld.param.u64 %rd2, [_ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm_param_0];
+ld.param.u64 %rd3, [_ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm_param_1];
+ld.param.u64 %rd4, [_ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d26reduce_warp_shuffle_kernelEPKfPfm_param_2];
+.loc	1 15 3
+mov.u32 %r6, %ctaid.x;
+mov.u32 %r28, %ntid.x;
+mul.wide.u32 %rd5, %r6, %r28;
+.loc	1 14 3
+mov.u32 %r2, %tid.x;
+.loc	1 15 3
+cvt.u64.u32 %rd6, %r2;
+add.s64 %rd1, %rd5, %rd6;
+.loc	1 16 3
+setp.ge.u64 %p1, %rd1, %rd4;
+mov.f32 %f19, 0f00000000;
+@%p1 bra $L__BB0_2;
+
+.loc	1 14 3
+cvta.to.global.u64 %rd7, %rd2;
+.loc	1 16 3
+shl.b64 %rd8, %rd1, 2;
+add.s64 %rd9, %rd7, %rd8;
+ld.global.nc.f32 %f19, [%rd9];
+
+$L__BB0_2:
+shl.b32 %r7, %r2, 2;
+mov.u32 %r8, _ZN11kernelforge7kernels55_GLOBAL__N__d150b119_22_reduce_warp_shuffle_cu_50ccbf8d5sdataE;
+add.s32 %r3, %r8, %r7;
+st.shared.f32 [%r3], %f19;
+.loc	1 17 3
+bar.sync 0;
+.loc	1 21 3
+setp.lt.u32 %p2, %r28, 64;
+@%p2 bra $L__BB0_6;
+
+$L__BB0_3:
+shr.u32 %r5, %r28, 1;
+.loc	1 22 5
+setp.ge.u32 %p3, %r2, %r5;
+@%p3 bra $L__BB0_5;
+
+.loc	1 23 7
+shl.b32 %r9, %r5, 2;
+add.s32 %r10, %r3, %r9;
+ld.shared.f32 %f5, [%r3];
+ld.shared.f32 %f6, [%r10];
+add.f32 %f7, %f6, %f5;
+st.shared.f32 [%r3], %f7;
+
+$L__BB0_5:
+.loc	1 25 5
+bar.sync 0;
+.loc	1 21 3
+setp.gt.u32 %p4, %r28, 127;
+mov.u32 %r28, %r5;
+@%p4 bra $L__BB0_3;
+
+$L__BB0_6:
+.loc	1 32 3
+setp.gt.u32 %p5, %r2, 31;
+@%p5 bra $L__BB0_9;
+
+.loc	1 33 5
+ld.shared.f32 %f8, [%r3];
+.loc	1 35 7
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %r11, %f8;
+mov.u32 %r12, 2;
+mov.u32 %r13, 31;
+mov.u32 %r14, 16;
+mov.u32 %r15, -1;
+shfl.sync.down.b32 %r16|%p6, %r11, %r14, %r13, %r15;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %f9, %r16;
+.loc	1 35 7
+add.f32 %f10, %f8, %f9;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %r17, %f10;
+mov.u32 %r18, 8;
+shfl.sync.down.b32 %r19|%p7, %r17, %r18, %r13, %r15;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %f11, %r19;
+.loc	1 35 7
+add.f32 %f12, %f10, %f11;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %r20, %f12;
+mov.u32 %r21, 4;
+shfl.sync.down.b32 %r22|%p8, %r20, %r21, %r13, %r15;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %f13, %r22;
+.loc	1 35 7
+add.f32 %f14, %f12, %f13;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %r23, %f14;
+shfl.sync.down.b32 %r24|%p9, %r23, %r12, %r13, %r15;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %f15, %r24;
+.loc	1 35 7
+add.f32 %f16, %f14, %f15;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %r25, %f16;
+mov.u32 %r26, 1;
+shfl.sync.down.b32 %r27|%p10, %r25, %r26, %r13, %r15;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 35 7
+mov.b32 %f17, %r27;
+.loc	1 35 7
+add.f32 %f3, %f16, %f17;
+.loc	1 37 5
+setp.ne.s32 %p11, %r2, 0;
+@%p11 bra $L__BB0_9;
+
+.loc	1 14 3
+cvta.to.global.u64 %rd10, %rd3;
+.loc	1 38 7
+.loc	3 84 3, function_name $L__info_string1, inlined_at 1 38 7
+atom.global.add.f32 %f18, [%rd10], %f3;
+
+$L__BB0_9:
+.loc	1 41 1
+ret;
+
+}
+.file	1 "/mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_warp_shuffle.cu"
+.file	2 "/usr/local/cuda/targets/x86_64-linux/include/sm_30_intrinsics.hpp"
+.file	3 "/usr/local/cuda/targets/x86_64-linux/include/sm_20_atomic_functions.hpp"
+.section	.debug_str
+{
+$L__info_string0:
+.b8 95,90,78,53,51,95,73,78,84,69,82,78,65,76,95,100,49,53,48,98,49,49,57,95,50,50,95,114,101,100,117,99,101,95,119,97,114,112,95,115
+.b8 104,117,102,102,108,101,95,99,117,95,53,48,99,99,98,102,56,100,49,54,95,95,115,104,102,108,95,100,111,119,110,95,115,121,110,99,69,106,102,106
+.b8 105,0
+$L__info_string1:
+.b8 95,90,78,53,51,95,73,78,84,69,82,78,65,76,95,100,49,53,48,98,49,49,57,95,50,50,95,114,101,100,117,99,101,95,119,97,114,112,95,115
+.b8 104,117,102,102,108,101,95,99,117,95,53,48,99,99,98,102,56,100,57,97,116,111,109,105,99,65,100,100,69,80,102,102,0
+
+}
+
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_warp_shuffle.cu
+
+Fatbin ptx code:
+================
+arch = sm_89
+code version = [8,5]
+host = linux
+compile_size = 64bit
+compressed
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_vectorized_coarsened.cu
+ptxasOptions =  --generate-line-info 
+
+//
+//
+//
+//
+//
+//
+
+.version 8.5
+.target sm_89
+.address_size 64
+
+.extern .shared .align 16 .b8 _ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a5sdataE[];
+
+.entry _ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm(
+.param .u64 _ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm_param_0,
+.param .u64 _ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm_param_1,
+.param .u64 _ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm_param_2
+)
+{
+.reg .pred %p<14>;
+.reg .f32 %f<38>;
+.reg .b32 %r<30>;
+.reg .b64 %rd<23>;
+.loc	1 19 0
+
+
+ld.param.u64 %rd11, [_ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm_param_0];
+ld.param.u64 %rd9, [_ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm_param_1];
+ld.param.u64 %rd10, [_ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a34reduce_vectorized_coarsened_kernelEPKfPfm_param_2];
+.loc	1 22 3
+cvta.to.global.u64 %rd1, %rd11;
+.loc	1 26 3
+mov.u32 %r6, %ctaid.x;
+mov.u32 %r29, %ntid.x;
+cvt.u64.u32 %rd2, %r29;
+mul.wide.u32 %rd12, %r6, %r29;
+.loc	1 22 3
+mov.u32 %r2, %tid.x;
+.loc	1 26 3
+cvt.u64.u32 %rd13, %r2;
+add.s64 %rd3, %rd12, %rd13;
+.loc	1 24 3
+shr.u64 %rd4, %rd10, 2;
+.loc	1 30 3
+setp.ge.u64 %p1, %rd3, %rd4;
+mov.f32 %f36, 0f00000000;
+@%p1 bra $L__BB0_3;
+
+.loc	1 27 3
+mov.u32 %r7, %nctaid.x;
+cvt.u64.u32 %rd14, %r7;
+mul.lo.s64 %rd5, %rd14, %rd2;
+mov.f32 %f36, 0f00000000;
+mov.u64 %rd22, %rd3;
+
+$L__BB0_2:
+.loc	1 31 5
+shl.b64 %rd15, %rd22, 4;
+add.s64 %rd16, %rd1, %rd15;
+ld.global.nc.v4.f32 {%f9, %f10, %f11, %f12}, [%rd16];
+.loc	1 32 5
+add.f32 %f17, %f9, %f10;
+add.f32 %f18, %f11, %f12;
+add.f32 %f19, %f17, %f18;
+add.f32 %f36, %f36, %f19;
+.loc	1 30 42
+add.s64 %rd22, %rd22, %rd5;
+.loc	1 30 3
+setp.lt.u64 %p2, %rd22, %rd4;
+@%p2 bra $L__BB0_2;
+
+$L__BB0_3:
+.loc	1 38 3
+and.b64 %rd8, %rd10, -4;
+.loc	1 39 3
+sub.s64 %rd17, %rd10, %rd8;
+.loc	1 41 3
+setp.ge.u64 %p3, %rd3, %rd17;
+@%p3 bra $L__BB0_5;
+
+.loc	1 42 5
+add.s64 %rd18, %rd8, %rd3;
+shl.b64 %rd19, %rd18, 2;
+add.s64 %rd20, %rd1, %rd19;
+ld.global.nc.f32 %f20, [%rd20];
+add.f32 %f36, %f36, %f20;
+
+$L__BB0_5:
+.loc	1 45 3
+shl.b32 %r8, %r2, 2;
+mov.u32 %r9, _ZN11kernelforge7kernels63_GLOBAL__N__148c9f5b_30_reduce_vectorized_coarsened_cu_e2456b0a5sdataE;
+add.s32 %r3, %r9, %r8;
+st.shared.f32 [%r3], %f36;
+.loc	1 46 3
+bar.sync 0;
+.loc	1 50 3
+setp.lt.u32 %p4, %r29, 64;
+@%p4 bra $L__BB0_9;
+
+$L__BB0_6:
+shr.u32 %r5, %r29, 1;
+.loc	1 51 5
+setp.ge.u32 %p5, %r2, %r5;
+@%p5 bra $L__BB0_8;
+
+.loc	1 52 7
+shl.b32 %r10, %r5, 2;
+add.s32 %r11, %r3, %r10;
+ld.shared.f32 %f21, [%r3];
+ld.shared.f32 %f22, [%r11];
+add.f32 %f23, %f22, %f21;
+st.shared.f32 [%r3], %f23;
+
+$L__BB0_8:
+.loc	1 54 5
+bar.sync 0;
+.loc	1 50 3
+setp.gt.u32 %p6, %r29, 127;
+mov.u32 %r29, %r5;
+@%p6 bra $L__BB0_6;
+
+$L__BB0_9:
+.loc	1 56 3
+setp.gt.u32 %p7, %r2, 31;
+@%p7 bra $L__BB0_12;
+
+.loc	1 57 5
+ld.shared.f32 %f24, [%r3];
+.loc	1 59 7
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %r12, %f24;
+mov.u32 %r13, 2;
+mov.u32 %r14, 31;
+mov.u32 %r15, 16;
+mov.u32 %r16, -1;
+shfl.sync.down.b32 %r17|%p8, %r12, %r15, %r14, %r16;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %f25, %r17;
+.loc	1 59 7
+add.f32 %f26, %f24, %f25;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %r18, %f26;
+mov.u32 %r19, 8;
+shfl.sync.down.b32 %r20|%p9, %r18, %r19, %r14, %r16;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %f27, %r20;
+.loc	1 59 7
+add.f32 %f28, %f26, %f27;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %r21, %f28;
+mov.u32 %r22, 4;
+shfl.sync.down.b32 %r23|%p10, %r21, %r22, %r14, %r16;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %f29, %r23;
+.loc	1 59 7
+add.f32 %f30, %f28, %f29;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %r24, %f30;
+shfl.sync.down.b32 %r25|%p11, %r24, %r13, %r14, %r16;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %f31, %r25;
+.loc	1 59 7
+add.f32 %f32, %f30, %f31;
+.loc	2 440 9, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %r26, %f32;
+mov.u32 %r27, 1;
+shfl.sync.down.b32 %r28|%p12, %r26, %r27, %r14, %r16;
+.loc	2 441 2, function_name $L__info_string0, inlined_at 1 59 7
+mov.b32 %f33, %r28;
+.loc	1 59 7
+add.f32 %f6, %f32, %f33;
+.loc	1 61 5
+setp.ne.s32 %p13, %r2, 0;
+@%p13 bra $L__BB0_12;
+
+.loc	1 22 3
+cvta.to.global.u64 %rd21, %rd9;
+.loc	1 62 7
+.loc	3 84 3, function_name $L__info_string1, inlined_at 1 62 7
+atom.global.add.f32 %f34, [%rd21], %f6;
+
+$L__BB0_12:
+.loc	1 65 1
+ret;
+
+}
+.file	1 "/mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_vectorized_coarsened.cu"
+.file	2 "/usr/local/cuda/targets/x86_64-linux/include/sm_30_intrinsics.hpp"
+.file	3 "/usr/local/cuda/targets/x86_64-linux/include/sm_20_atomic_functions.hpp"
+.section	.debug_str
+{
+$L__info_string0:
+.b8 95,90,78,54,49,95,73,78,84,69,82,78,65,76,95,49,52,56,99,57,102,53,98,95,51,48,95,114,101,100,117,99,101,95,118,101,99,116,111,114
+.b8 105,122,101,100,95,99,111,97,114,115,101,110,101,100,95,99,117,95,101,50,52,53,54,98,48,97,49,54,95,95,115,104,102,108,95,100,111,119,110,95
+.b8 115,121,110,99,69,106,102,106,105,0
+$L__info_string1:
+.b8 95,90,78,54,49,95,73,78,84,69,82,78,65,76,95,49,52,56,99,57,102,53,98,95,51,48,95,114,101,100,117,99,101,95,118,101,99,116,111,114
+.b8 105,122,101,100,95,99,111,97,114,115,101,110,101,100,95,99,117,95,101,50,52,53,54,98,48,97,57,97,116,111,109,105,99,65,100,100,69,80,102,102
+.b8 0
+
+}
+
+
+Fatbin elf code:
+================
+arch = sm_89
+code version = [1,7]
+host = linux
+compile_size = 64bit
+identifier = /mnt/c/Users/guntr/Documents/passion-projects/projects/02-kernelforge/src/kernels/reduction/reduce_vectorized_coarsened.cu
