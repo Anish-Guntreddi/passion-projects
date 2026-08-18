@@ -3,3 +3,10 @@
 *.obj
 *.pyc
 __pycache__/
+# nsys stats' SQLite export of a committed .nsys-rep -- regenerable with
+# `nsys stats --report ... <file>.nsys-rep` (Phase 6, ADR 0014); the
+# .nsys-rep is the source of truth, this is a derived intermediate.
+profiling/nsight-systems/*.sqlite
+# Phase 7 analysis pipeline venv (analysis/README.md: `python3 -m venv
+# analysis/.venv && analysis/.venv/bin/pip install -r analysis/requirements.txt`)
+analysis/.venv/

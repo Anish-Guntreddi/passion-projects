@@ -1,53 +1,60 @@
 # Profiling Metric Guide
 
-**Status: not yet populated.** This file is part of the repo structure
-from Phase 0 (per the spec's tech-stack plan) but its content is a Phase
-6 ("Profiling & low-level analysis") deliverable — no profiler evidence is
-claimed anywhere in Phases 0-1, per hard constraint 3 (never claim
-speedup/evidence that isn't backed by committed artifacts).
+Phase 6 ("Profiling & low-level analysis") deliverable. See
+`docs/decisions/0014-phase6-profiling-evidence-strategy.md` for the full
+investigation of what's usable in this environment and why; this file is
+the "which evidence source answers which kind of question" reference the
+3 case studies (`profiling/case-studies/`) point back to.
 
-## What's here today
+## What's here
 
-- `nsight-systems/` — empty, reserved for `.nsys-rep` timeline captures.
-- `nsight-compute/` — empty, reserved for `.ncu-rep` kernel-metric captures.
+- `occupancy/` — `occupancy_report` JSON records (schema:
+  `profiling/schema/occupancy_report.schema.json`), one per
+  `(kernel_family, variant, launch shape)` queried. Theoretical occupancy
+  from the CUDA Runtime's own occupancy API, computed from the actual
+  compiled kernel's register/shared-memory footprint.
+- `nsight-systems/` — `.nsys-rep` captures + a `nsys stats` text summary
+  per capture. Contains real, populated **host-side CUDA API** data
+  (`cudaLaunchKernel`/`cudaMemcpy`/`cudaEventSynchronize` call counts and
+  durations); **device-side GPU kernel/memory trace sections are
+  genuinely empty** in every capture here (`nsys stats` reports `SKIPPED:
+  ... does not contain CUDA kernel data` — this is not this repo's bug,
+  see ADR 0014, cross-checked against FlashLite's independently-captured
+  `.nsys-rep` files showing the identical result).
+- `nsight-compute/` — no `.ncu-rep` files; `README.md` there documents
+  exactly why (`ERR_NVGPUCTRPERM`, a WSL2-host-driver permission
+  restriction, reproduced with the exact command and error).
+- `ptx-sass/` — `cuobjdump --dump-ptx` / `--dump-sass` output for the
+  benchmark binaries covering the 3 case-study kernel families
+  (transpose, reduction, gemm). Static disassembly, needs no GPU access.
+- `case-studies/` — the 3 required profiler-backed writeups (FR6),
+  combining the sources above with already-committed `benchmarks/raw/`
+  wall-clock evidence.
 
-## Verified tool availability on the development machine (2026-08-17, WSL2)
+## Which evidence source answers which kind of question
+
+| Question | Source | Where |
+|---|---|---|
+| "How many threads/blocks can be co-resident on one SM for this exact compiled kernel + launch config?" (theoretical occupancy) | CUDA Runtime occupancy API | `profiling/occupancy/*.jsonl` |
+| "How many registers does this kernel actually use? How much shared memory?" | `cudaFuncGetAttributes` (embedded in the occupancy record) | `profiling/occupancy/*.jsonl` — `registers_per_thread`, `static_shared_bytes_per_block` |
+| "Given this problem shape's grid, what fraction of the WHOLE device's block-residency capacity is used?" (grid-level utilization, distinct from per-SM occupancy) | `occupancy_report`'s `--m`/`--n` grid math | `profiling/occupancy/gemm.jsonl` — `grid_utilization_fraction` |
+| "Does this kernel actually compile to the memory-access pattern the hypothesis describes (coalesced vs. strided; bank-conflicted vs. not)?" | SASS disassembly (`LDG`/`STG`/`LDS`/`STS` addressing) | `profiling/ptx-sass/*.sass.txt` |
+| "How many synchronization barriers / warp-shuffle instructions does this kernel issue?" | SASS instruction counts (`BAR.SYNC`, `SHFL.DOWN`) | `profiling/ptx-sass/*.sass.txt` |
+| "How many times was this kernel actually launched? What did the host spend time on around it (allocation, transfer, sync)?" | `nsys`'s host-side CUDA API trace | `profiling/nsight-systems/*.stats.txt` (`cuda_api_sum` table) |
+| "How long did the kernel itself take, across many repetitions, with a real distribution?" | This repo's own `cudaEvent`-based timing (unaffected by the WSL2 restriction — the app times itself) | `benchmarks/raw/*.jsonl` (already committed in Phases 1-5) |
+| "What would a hardware performance counter (achieved occupancy, warp execution efficiency, DRAM/L2 hit rate) show?" | **Not available in this environment** (`ERR_NVGPUCTRPERM`) | `profiling/nsight-compute/README.md` documents the attempt; no case study in this repo claims a hardware-counter number |
+
+## Verified tool availability (2026-08-17, WSL2, re-checked at Phase 6 start)
 
 ```
-$ which nsys && nsys --version
-/usr/local/bin/nsys
+$ nsys --version
 NVIDIA Nsight Systems version 2024.5.1.113-245134619542v0
-
-$ which ncu
-(not found)
-
+$ /usr/local/cuda/bin/ncu --version
+NVIDIA (R) Nsight Compute Command Line Profiler, Version 2024.3.2.0 -- installed, but ERR_NVGPUCTRPERM on actual use (ADR 0014)
+$ /usr/local/cuda/bin/cuobjdump --version | head -2
+Cuobjdump: NVIDIA (R) Cuda Object Dump Utility, Version 12.6.85
+$ /usr/local/cuda/bin/nvdisasm --version | head -2
+nvdisasm: NVIDIA (R) CUDA disassembler, Release 12.6, V12.6.85
 $ /usr/local/cuda/bin/compute-sanitizer --version
-NVIDIA (R) Compute Sanitizer
-Version 2024.3.0.0 (build 34841621) (public-release)
+NVIDIA (R) Compute Sanitizer, Version 2024.3.0.0 (public-release)
 ```
-
-**Nsight Compute (`ncu`) is not installed on this machine.** Nsight
-Systems and Compute Sanitizer are present and confirmed working
-(`scripts/run_sanitizer.sh` runs clean over this repo's test suite as of
-Phase 1). See ADR 0006 for how this affects the Phase 6 plan: `ncu`
-(or an equivalent kernel-metric source) needs to be installed before any
-SASS/occupancy/bank-conflict metric can be *measured* rather than
-predicted from source-level reasoning.
-
-## Plan for Phase 6
-
-Once `ncu` is available, this file will be filled in with, at minimum:
-- Which metrics answer which kind of question (e.g.
-  `gld_efficiency`/`gst_efficiency` or their Ada-generation equivalents
-  for coalescing questions; `shared_ld_bank_conflict` for the
-  known-but-unmeasured `transpose_tiled` bank conflict noted in
-  `src/kernels/transpose/transpose_tiled.cuh`; occupancy/achieved-occupancy
-  for launch-configuration questions).
-- Exact `ncu` invocation used for each of the 3 profiler-backed case
-  studies (FR6), with the resulting reports committed under
-  `profiling/nsight-compute/`.
-- Nsight Systems timeline captures for any multi-kernel/host-device
-  overlap question, under `profiling/nsight-systems/`.
-
-Nothing above is a claim of what a profiler *would* show — only a plan
-for what will be measured, filled in only once actually measured.

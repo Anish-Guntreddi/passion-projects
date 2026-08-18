@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://kernelforge.local/schema/occupancy_report.schema.json",
+  "title": "KernelForge OccupancyReport",
+  "description": "One committed, machine-readable theoretical-occupancy measurement (ADR 0014). Emitted by apps/occupancy_report_main.cpp; mirrors src/common/occupancy.cuh:OccupancyReport plus the emit()-added grid-utilization fields. Every field is computed by the CUDA Runtime's own occupancy API (cudaOccupancyMaxActiveBlocksPerMultiprocessor / cudaFuncGetAttributes) applied to the actual compiled kernel -- not a hardware-counter (ncu) measurement; see ADR 0014 for why.",
+  "type": "object",
+  "required": [
+    "record_type", "kernel_family", "variant", "block_size",
+    "registers_per_thread", "static_shared_bytes_per_block",
+    "dynamic_shared_bytes_per_block", "max_threads_per_block_this_kernel",
+    "device_sm_count", "device_max_threads_per_sm",
+    "max_active_blocks_per_sm", "achieved_threads_per_sm",
+    "occupancy_fraction", "suggested_block_size", "suggested_min_grid_size",
+    "problem_m", "problem_n",
+    "grid_blocks_total", "theoretical_max_resident_blocks",
+    "grid_utilization_fraction"
+  ],
+  "properties": {
+    "record_type": { "type": "string", "const": "occupancy_report" },
+    "kernel_family": { "type": "string", "enum": ["transpose", "reduction", "gemm"] },
+    "variant": { "type": "string" },
+    "block_size": { "type": "integer", "minimum": 1 },
+    "registers_per_thread": { "type": "integer", "minimum": 0, "description": "cudaFuncAttributes::numRegs -- a property of the compiled cubin, independent of any particular launch." },
+    "static_shared_bytes_per_block": { "type": "integer", "minimum": 0, "description": "cudaFuncAttributes::sharedSizeBytes -- fixed at compile time by this kernel's __shared__ array declarations." },
+    "dynamic_shared_bytes_per_block": { "type": "integer", "minimum": 0, "description": "The launch<<<>>> 3rd-argument value this report was queried against." },
+    "max_threads_per_block_this_kernel": { "type": "integer", "minimum": 1 },
+    "device_sm_count": { "type": "integer", "minimum": 1 },
+    "device_max_threads_per_sm": { "type": "integer", "minimum": 1 },
+    "max_active_blocks_per_sm": { "type": "integer", "minimum": 0, "description": "cudaOccupancyMaxActiveBlocksPerMultiprocessor at this exact block_size / shared-memory footprint." },
+    "achieved_threads_per_sm": { "type": "integer", "minimum": 0, "description": "max_active_blocks_per_sm * block_size." },
+    "occupancy_fraction": { "type": "number", "minimum": 0, "maximum": 1, "description": "achieved_threads_per_sm / device_max_threads_per_sm. THEORETICAL occupancy ceiling, not an achieved/measured runtime occupancy (that would need ncu's hardware counters -- ADR 0014)." },
+    "suggested_block_size": { "type": "integer", "minimum": 0, "description": "cudaOccupancyMaxPotentialBlockSize's block-size suggestion for this kernel, queried at 0 dynamic shared bytes (see occupancy.cuh comment) -- for comparison against block_size, not a claim that the repo should switch to it." },
+    "suggested_min_grid_size": { "type": "integer", "minimum": 0 },
+    "problem_m": {
+      "type": "integer",
+      "description": "Raw --m CLI value this record's grid_blocks_total was computed from, echoed verbatim so downstream consumers (e.g. analysis/generate_plots.py) can join records to a problem shape by value instead of assuming file/record order. -1 sentinel if not given / not applicable to this family (see occupancy_report_main.cpp)."
+    },
+    "problem_n": {
+      "type": "integer",
+      "description": "Raw --n CLI value this record's grid_blocks_total was computed from (for transpose, the single square dimension; for gemm, the N dimension paired with problem_m). -1 sentinel if not given / not applicable to this family (see occupancy_report_main.cpp)."
+    },
+    "grid_blocks_total": {
+      "type": "integer",
+      "description": "Total blocks the requested problem shape's grid launches (-1 sentinel if not applicable / not requested via --m/--n/--n for this family; see occupancy_report_main.cpp)."
+    },
+    "theoretical_max_resident_blocks": { "type": "integer", "minimum": 0, "description": "device_sm_count * max_active_blocks_per_sm -- how many blocks of this shape could be co-resident across the WHOLE device at once. 0 when grid_blocks_total <= 0 (not computed)." },
+    "grid_utilization_fraction": {
+      "type": "number", "minimum": 0, "maximum": 1,
+      "description": "min(1, grid_blocks_total / theoretical_max_resident_blocks) -- what fraction of the device's total block-residency capacity this problem shape's grid can occupy in a single wave. 0.0 when grid_blocks_total <= 0 (not computed, not a claim of 0% utilization)."
+    }
+  }
+}

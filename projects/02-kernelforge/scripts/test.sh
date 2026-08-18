@@ -16,3 +16,9 @@ echo "=== validating benchmarks/raw/*.jsonl against schema ==="
 python3 "${ROOT_DIR}/scripts/validate_results.py" \
   "${ROOT_DIR}/benchmarks/raw" \
   "${ROOT_DIR}/benchmarks/schema/bench_result.schema.json"
+
+echo ""
+echo "=== validating profiling/occupancy/*.jsonl against schema (Phase 6, ADR 0014) ==="
+python3 "${ROOT_DIR}/scripts/validate_occupancy.py" \
+  "${ROOT_DIR}/profiling/occupancy" \
+  "${ROOT_DIR}/profiling/schema/occupancy_report.schema.json"

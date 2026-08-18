@@ -16,6 +16,8 @@
 
 #include <cuda_runtime.h>
 
+#include "common/occupancy.cuh"
+
 namespace kernelforge::kernels {
 
 inline constexpr int kTransposeTileDim = 32;
@@ -24,5 +26,9 @@ void transpose_tiled_launch(const float* d_in, float* d_out, int rows, int cols,
                              cudaStream_t stream, dim3& out_grid, dim3& out_block);
 
 float transpose_tiled_run_host(const float* h_in, float* h_out, int rows, int cols);
+
+// Phase 6: theoretical occupancy of transpose_tiled_kernel at its fixed
+// 32x32=1024-thread block shape -- see common/occupancy.cuh.
+kernelforge::OccupancyReport transpose_tiled_query_occupancy();
 
 } // namespace kernelforge::kernels

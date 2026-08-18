@@ -63,6 +63,11 @@ void reduce_warp_shuffle_launch(const float* d_in, float* d_out, std::size_t n, 
   KF_CUDA_CHECK_LAST_ERROR();
 }
 
+kernelforge::OccupancyReport reduce_warp_shuffle_query_occupancy(int block_size) {
+  const std::size_t smem_bytes = static_cast<std::size_t>(block_size) * sizeof(float);
+  return kernelforge::compute_occupancy(reduce_warp_shuffle_kernel, block_size, smem_bytes);
+}
+
 float reduce_warp_shuffle_run_host(const float* h_in, std::size_t n, float* h_sum_out,
                                     int block_size) {
   if (n == 0) {

@@ -1,7 +1,14 @@
 # ADR 0006: SASS Analysis Depth (D6)
 
-- **Status:** Accepted (not yet exercised)
-- **Date:** 2026-08-17
+- **Status:** Accepted; exercised in Phase 6 (2026-08-17) — see
+  `profiling/case-studies/01-transpose-bank-conflict.md` (SASS used to
+  confirm the shared-memory bank-conflict addressing pattern) and
+  `profiling/case-studies/02-reduction-warp-shuffle-barriers.md` (SASS
+  used to confirm barrier/shuffle instruction counts); Case Study 3
+  (`03-gemm-register-tiling-occupancy.md`) stays at the PTX/occupancy
+  level per this ADR's default, since occupancy + register-count evidence
+  fully explains that result without needing SASS.
+- **Date:** 2026-08-17 (decision); 2026-08-17 (exercised, Phase 6)
 - **Decision driver:** Spec open decision D6 — default: PTX for 3 case
   studies; SASS only where it explains a result.
 
@@ -32,3 +39,14 @@ optional). Recorded now so the convention is fixed in advance.
   this is noted here so Phase 6 planning knows `ncu` needs to be
   installed (or its absence worked around) before SASS/kernel-metric
   work can start; it is not required for Phases 0–1.
+- **Phase 6 update (2026-08-17):** `ncu` turned out to be present after
+  all (a `$PATH` issue, not a missing package) but is blocked by a
+  genuine driver-level permission restriction (`ERR_NVGPUCTRPERM`) on
+  actual use — see `docs/decisions/0014-phase6-profiling-evidence-
+  strategy.md` for the full investigation. `cuobjdump`/`nvdisasm` (used
+  for this ADR's PTX/SASS extraction) are both present and working,
+  needing no GPU access at all. This ADR's PTX-default/SASS-where-it-
+  explains-a-result policy is applied unchanged by ADR 0014's evidence
+  strategy — only the source of the "kernel metric" evidence (theoretical
+  occupancy + PTX/SASS + this repo's own committed timings, rather than
+  `ncu`) is different from what was anticipated here.

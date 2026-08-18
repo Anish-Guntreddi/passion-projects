@@ -29,6 +29,8 @@
 
 #include <cuda_runtime.h>
 
+#include "common/occupancy.cuh"
+
 namespace kernelforge::kernels {
 
 // `zero_output` (default true): see reduce_naive_interleaved.cuh -- pass
@@ -39,5 +41,8 @@ void reduce_warp_shuffle_launch(const float* d_in, float* d_out, std::size_t n, 
 
 float reduce_warp_shuffle_run_host(const float* h_in, std::size_t n, float* h_sum_out,
                                     int block_size = 256);
+
+// Phase 6: theoretical occupancy at `block_size` -- see common/occupancy.cuh.
+kernelforge::OccupancyReport reduce_warp_shuffle_query_occupancy(int block_size = 256);
 
 } // namespace kernelforge::kernels

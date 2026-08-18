@@ -34,6 +34,8 @@
 
 #include <cuda_runtime.h>
 
+#include "common/occupancy.cuh"
+
 namespace kernelforge::kernels {
 
 // Block-level tile dimensions (A: BM x BK staged tile, B: BK x BN staged
@@ -59,5 +61,10 @@ void gemm_register_tiled_launch(const float* d_a, const float* d_b, float* d_c, 
 
 float gemm_register_tiled_run_host(const float* h_a, const float* h_b, float* h_c, int m, int n,
                                     int k);
+
+// Phase 6: theoretical occupancy of gemm_register_tiled_kernel at its fixed
+// kGemmRegBlockThreads = 512-thread block shape -- see common/occupancy.cuh
+// and profiling/case-studies/03-gemm-register-tiling-occupancy.md.
+kernelforge::OccupancyReport gemm_register_tiled_query_occupancy();
 
 } // namespace kernelforge::kernels

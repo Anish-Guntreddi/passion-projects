@@ -14,6 +14,7 @@ add_executable(kf_tests
   test_gemm.cpp
   test_softmax.cpp
   test_rmsnorm.cpp
+  test_occupancy.cpp
 )
 
 target_include_directories(kf_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/apps)

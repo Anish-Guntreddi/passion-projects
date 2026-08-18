@@ -29,6 +29,8 @@
 
 #include <cuda_runtime.h>
 
+#include "common/occupancy.cuh"
+
 namespace kernelforge::kernels {
 
 // Tile dimension for both the thread block (TILE x TILE threads) and the
@@ -44,5 +46,13 @@ void gemm_tiled_launch(const float* d_a, const float* d_b, float* d_c, int m, in
                         cudaStream_t stream, dim3& out_grid, dim3& out_block);
 
 float gemm_tiled_run_host(const float* h_a, const float* h_b, float* h_c, int m, int n, int k);
+
+// Phase 6: theoretical occupancy of gemm_tiled_kernel at its fixed
+// kGemmTileDim x kGemmTileDim = 1024-thread block shape, with its actual
+// 2 * kGemmTileDim^2 * sizeof(float) static shared-memory footprint -- see
+// common/occupancy.cuh. Grid-level (whole-GPU) utilization is a separate
+// question from this per-SM number -- see profiling/case-studies/
+// 03-gemm-register-tiling-occupancy.md.
+kernelforge::OccupancyReport gemm_tiled_query_occupancy();
 
 } // namespace kernelforge::kernels

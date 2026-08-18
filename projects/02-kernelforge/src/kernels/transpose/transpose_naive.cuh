@@ -17,11 +17,19 @@
 
 #include <cuda_runtime.h>
 
+#include "common/occupancy.cuh"
+
 namespace kernelforge::kernels {
 
 void transpose_naive_launch(const float* d_in, float* d_out, int rows, int cols,
                              cudaStream_t stream, dim3& out_grid, dim3& out_block);
 
 float transpose_naive_run_host(const float* h_in, float* h_out, int rows, int cols);
+
+// Phase 6: theoretical occupancy of transpose_naive_kernel at its fixed
+// 32x32=1024-thread block shape (see transpose_naive.cu), via the CUDA
+// occupancy API -- see common/occupancy.cuh for what this does and does not
+// measure.
+kernelforge::OccupancyReport transpose_naive_query_occupancy();
 
 } // namespace kernelforge::kernels

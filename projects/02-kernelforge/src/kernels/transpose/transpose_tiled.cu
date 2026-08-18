@@ -51,6 +51,11 @@ void transpose_tiled_launch(const float* d_in, float* d_out, int rows, int cols,
   KF_CUDA_CHECK_LAST_ERROR();
 }
 
+kernelforge::OccupancyReport transpose_tiled_query_occupancy() {
+  return kernelforge::compute_occupancy(transpose_tiled_kernel,
+                                         kTransposeTileDim * kTransposeTileDim, 0);
+}
+
 float transpose_tiled_run_host(const float* h_in, float* h_out, int rows, int cols) {
   const std::size_t n = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
   if (n == 0) return 0.0f; // FR6 edge size: legal, nothing to allocate/launch.

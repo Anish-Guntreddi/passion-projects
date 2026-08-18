@@ -60,6 +60,11 @@ void gemm_tiled_launch(const float* d_a, const float* d_b, float* d_c, int m, in
   KF_CUDA_CHECK_LAST_ERROR();
 }
 
+kernelforge::OccupancyReport gemm_tiled_query_occupancy() {
+  // a_tile + b_tile: both __shared__ (static), 0 dynamic shared bytes at launch.
+  return kernelforge::compute_occupancy(gemm_tiled_kernel, kGemmTileDim * kGemmTileDim, 0);
+}
+
 float gemm_tiled_run_host(const float* h_a, const float* h_b, float* h_c, int m, int n, int k) {
   const std::size_t c_elems = static_cast<std::size_t>(m) * static_cast<std::size_t>(n);
   if (c_elems == 0) return 0.0f;

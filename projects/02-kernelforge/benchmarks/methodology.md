@@ -607,3 +607,49 @@ overall peaks at cols=512 (1.39x, with cols=768 essentially tied at
 1.38x) and narrows to a small loss (0.98x) by cols=8192** — the full
 ladder's net benefit is real but concentrated in the small-to-medium
 shape range this sweep covers, not uniform across it.
+
+## 14. Phase 6 — profiling & low-level analysis
+
+Phase 6 does not add new wall-clock benchmark numbers to this file; it
+adds a **second kind of evidence** (occupancy, PTX/SASS, host-side
+timeline traces) for 3 already-benchmarked comparisons above, to check
+whether the "interpretation" step of each one's hypothesis/evidence/
+interpretation loop (`docs/optimization-method.md`) is actually confirmed
+at the instruction/resource level, not just consistent with the
+wall-clock direction. See:
+
+- `docs/decisions/0014-phase6-profiling-evidence-strategy.md` — why
+  Nsight Compute (`ncu`) and Nsight Systems' device-side GPU trace are
+  both genuinely unavailable in this environment (`ERR_NVGPUCTRPERM`,
+  reproduced precisely, not asserted), and exactly what evidence sources
+  Phase 6 uses instead.
+- `profiling/case-studies/01-transpose-bank-conflict.md` — revisits §8's
+  transpose naive-vs-tiled comparison. Occupancy is proven identical
+  between the two variants (rules out concurrency as the explanation);
+  SASS confirms the coalescing mechanism directly in the compiled
+  addressing arithmetic, and additionally confirms (for the first time
+  with real evidence, not just a source comment) `transpose_tiled.cuh`'s
+  long-standing bank-conflict prediction.
+- `profiling/case-studies/02-reduction-warp-shuffle-barriers.md` —
+  revisits §9.1's V2→V3 reduction comparison. Occupancy is proven
+  identical (100% for both); SASS confirms the exact barrier-execution
+  count the hypothesis predicted removing (5 per block), turning what
+  Phase 2 could only report as a wall-clock direction into an
+  instruction-level-confirmed mechanism.
+- `profiling/case-studies/03-gemm-register-tiling-occupancy.md` —
+  revisits §11's V3→V4 GEMM comparison and its documented small-size
+  regression. Per-SM occupancy is proven identical between the two
+  variants at every size (ruling out per-SM occupancy as the cause);
+  grid-level utilization, computed from the same occupancy API, is shown
+  to cross from far-below-saturated to fully-saturated at exactly the
+  size (1024) where the wall-clock data crosses from regression to
+  decisive win — the launch-config arithmetic §11 already used, now
+  backed by the CUDA Runtime's own occupancy numbers rather than block-
+  count arithmetic alone.
+
+Every occupancy number cited in the 3 case studies is a committed,
+schema-validated record in `profiling/occupancy/*.jsonl`
+(`profiling/schema/occupancy_report.schema.json`); every PTX/SASS excerpt
+is generated from this repo's own compiled binaries
+(`profiling/ptx-sass/*.txt`, reproducible with `cuobjdump --dump-ptx`/
+`--dump-sass`); every `nsys` claim is host-side only, per ADR 0014.

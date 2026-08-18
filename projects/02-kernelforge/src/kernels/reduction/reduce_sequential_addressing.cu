@@ -54,6 +54,12 @@ void reduce_sequential_addressing_launch(const float* d_in, float* d_out, std::s
   KF_CUDA_CHECK_LAST_ERROR();
 }
 
+kernelforge::OccupancyReport reduce_sequential_addressing_query_occupancy(int block_size) {
+  const std::size_t smem_bytes = static_cast<std::size_t>(block_size) * sizeof(float);
+  return kernelforge::compute_occupancy(reduce_sequential_addressing_kernel, block_size,
+                                         smem_bytes);
+}
+
 float reduce_sequential_addressing_run_host(const float* h_in, std::size_t n, float* h_sum_out,
                                              int block_size) {
   if (n == 0) {

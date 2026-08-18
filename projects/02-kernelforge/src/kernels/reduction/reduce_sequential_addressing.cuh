@@ -28,6 +28,8 @@
 
 #include <cuda_runtime.h>
 
+#include "common/occupancy.cuh"
+
 namespace kernelforge::kernels {
 
 // `zero_output` (default true): zero `*d_out` via cudaMemsetAsync before
@@ -41,5 +43,10 @@ void reduce_sequential_addressing_launch(const float* d_in, float* d_out, std::s
 
 float reduce_sequential_addressing_run_host(const float* h_in, std::size_t n, float* h_sum_out,
                                              int block_size = 256);
+
+// Phase 6: theoretical occupancy at `block_size`, with this kernel's actual
+// `block_size * sizeof(float)` dynamic shared-memory allocation -- see
+// common/occupancy.cuh.
+kernelforge::OccupancyReport reduce_sequential_addressing_query_occupancy(int block_size = 256);
 
 } // namespace kernelforge::kernels

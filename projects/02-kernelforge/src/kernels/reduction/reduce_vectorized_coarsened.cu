@@ -96,6 +96,12 @@ void reduce_vectorized_coarsened_launch(const float* d_in, float* d_out, std::si
   KF_CUDA_CHECK_LAST_ERROR();
 }
 
+kernelforge::OccupancyReport reduce_vectorized_coarsened_query_occupancy(int block_size) {
+  const std::size_t smem_bytes = static_cast<std::size_t>(block_size) * sizeof(float);
+  return kernelforge::compute_occupancy(reduce_vectorized_coarsened_kernel, block_size,
+                                         smem_bytes);
+}
+
 float reduce_vectorized_coarsened_run_host(const float* h_in, std::size_t n, float* h_sum_out,
                                             int block_size) {
   if (n == 0) {

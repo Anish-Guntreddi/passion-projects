@@ -90,8 +90,16 @@ summary of what is otherwise machine-verifiable per-result.
   (`nvidia-smi -lgc ...` → permission denied). See ADR 0005. Every
   benchmark result records `locked_clocks: false` plus an observed
   (unlocked) clock snapshot.
-- **Nsight Compute (`ncu`) is not installed** on this machine as of
-  2026-08-17; Nsight Systems (`nsys`, v2024.5.1.113) and Compute Sanitizer
-  (v2024.3.0.0) are present and working. This has no impact on Phases 0-1
-  (no profiler evidence is claimed here); see ADR 0006 for the Phase 6
-  plan this affects.
+- **Nsight Compute (`ncu`) is present but blocked by `ERR_NVGPUCTRPERM`**
+  (a GPU-performance-counter permission restriction enforced by the
+  Windows host driver under WSL2, not fixable from inside this guest) —
+  confirmed at Phase 6 (2026-08-17) with a direct reproduction; the
+  earlier "not installed" note above described Phase 0-1's less precise
+  `which ncu` check, before the actual package location/behavior was
+  investigated. **Nsight Systems' device-side GPU kernel trace is
+  affected by the same restriction** (its host-side CUDA API trace is
+  unaffected and works). See `docs/decisions/
+  0014-phase6-profiling-evidence-strategy.md` for the full investigation
+  and what Phase 6 uses instead (theoretical occupancy via the CUDA
+  Runtime API, PTX/SASS static disassembly, `nsys` host-side traces, and
+  this repo's own committed CUDA-event kernel timings).
