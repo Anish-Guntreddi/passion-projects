@@ -62,4 +62,27 @@ void WriteWholeFile(const std::string& path, const std::string& contents);
 void CorruptByteAt(const std::string& path, std::int64_t byte_offset,
                     unsigned char mask = 0xFF);
 
+// RAII wrapper for a unique, empty *directory* under the OS temp
+// directory, recursively removed on destruction -- the DB-directory
+// counterpart of TempFile above, for tests that open a persistent
+// pebbledb::DB (DB::Open() takes a directory path, not a single file --
+// spec roadmap Phase 4). The directory itself is created eagerly (unlike
+// TempFile's underlying file, which is a placeholder DB::Open() then
+// populates); DB::Open() is also happy to create-if-absent on its own,
+// but pre-creating here keeps this helper's contract simple ("a path
+// that exists as an empty directory") regardless of which API a given
+// test opens it with first.
+class TempDir {
+ public:
+  TempDir();
+  ~TempDir();
+  TempDir(const TempDir&) = delete;
+  TempDir& operator=(const TempDir&) = delete;
+
+  const std::string& path() const { return path_; }
+
+ private:
+  std::string path_;
+};
+
 }  // namespace pebbledb::testutil

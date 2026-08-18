@@ -17,6 +17,9 @@ add_executable(pebbledb_unit_tests
   unit/test_memtable.cpp
   unit/test_memtable_list.cpp
   unit/test_sstable_format.cpp
+  unit/test_manifest_format.cpp
+  unit/test_bloom_filter.cpp
+  unit/test_block_cache.cpp
 )
 target_link_libraries(pebbledb_unit_tests PRIVATE
   pebbledb_core
@@ -26,6 +29,7 @@ target_link_libraries(pebbledb_unit_tests PRIVATE
 
 add_executable(pebbledb_recovery_tests
   recovery/test_wal_truncation_recovery.cpp
+  recovery/test_manifest_recovery.cpp
 )
 target_link_libraries(pebbledb_recovery_tests PRIVATE
   pebbledb_core
@@ -37,6 +41,8 @@ target_link_libraries(pebbledb_recovery_tests PRIVATE
 add_executable(pebbledb_integration_tests
   integration/test_sstable_writer_reader.cpp
   integration/test_memtable_flush_to_sstable.cpp
+  integration/test_sstable_filter_and_cache.cpp
+  integration/test_db_persistence.cpp
 )
 target_link_libraries(pebbledb_integration_tests PRIVATE
   pebbledb_core
@@ -48,6 +54,7 @@ target_link_libraries(pebbledb_integration_tests PRIVATE
 add_executable(pebbledb_corruption_tests
   corruption/test_wal_corruption.cpp
   corruption/test_sstable_corruption.cpp
+  corruption/test_manifest_corruption.cpp
 )
 target_link_libraries(pebbledb_corruption_tests PRIVATE
   pebbledb_core

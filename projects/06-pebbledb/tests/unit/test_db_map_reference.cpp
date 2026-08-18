@@ -9,10 +9,15 @@
 #include <gtest/gtest.h>
 
 // Phase 0 exit criterion (spec roadmap): "put/get/delete semantics tested
-// without persistence." These tests exercise DB's in-memory map reference
-// implementation directly — no WAL, no files, no restart. Persisted-state
-// tests (WAL-level) live in tests/recovery and tests/corruption; a DB that
-// actually survives a process restart is a later phase (4).
+// without persistence." These tests exercise DB's in-memory-only mode
+// (the default constructor, `DB db;`) directly — no WAL, no files, no
+// restart. As of Phase 4 this mode is backed by memtable::MemTableList
+// rather than a raw std::map (see ADR 0013), but its contract is
+// unchanged: no persistence, no path argument, fully supported
+// alongside (not superseded by) the disk-backed DB::Open() mode.
+// Persisted-state tests (WAL-level) live in tests/recovery and
+// tests/corruption; a real, disk-backed DB surviving a process restart
+// is tests/integration/test_db_persistence.cpp (Phase 4).
 
 namespace pebbledb {
 namespace {
@@ -185,15 +190,18 @@ TEST(Db, StatsLiveKeyCountIgnoresDeleteOfAbsentKey) {
   EXPECT_EQ(stats.live_key_count, 1u);
 }
 
-// A modest randomized-operation check against an independent std::map +
-// std::set "oracle", distinct from DB's own internal std::map, so a bug
-// in DB's Put/Delete/Get logic (as opposed to the container it happens to
-// use) would be caught. This is a light-weight precursor to, not a
-// substitute for, spec §1.8's full "random operation stream vs a
+// A modest randomized-operation check against an independent std::map
+// "oracle", distinct from whatever DB's in-memory mode uses internally
+// (memtable::MemTableList as of Phase 4 — ADR 0013), so a bug in DB's
+// Put/Delete/Get logic (as opposed to the data structure it happens to
+// delegate to) would be caught. This is a light-weight precursor to,
+// not a substitute for, spec §1.8's full "random operation stream vs a
 // std::map reference model, across restarts" property test — the
-// "across restarts" half requires persistence (WAL+MemTable+SSTable),
-// which does not exist until later phases; see the phase report for
-// exactly what is/isn't covered yet.
+// "across restarts" half requires real persistence, which this
+// in-memory-only mode deliberately does not have; see
+// tests/integration/test_db_persistence.cpp's
+// RandomizedOperationsAcrossMultipleRestartsMatchOracle for that full
+// version, against a real, disk-backed DB.
 TEST(Db, RandomizedOperationsMatchIndependentOracle) {
   DB db;
   std::map<std::string, std::string> oracle;

@@ -89,6 +89,7 @@ ReadResult Reader::ReadNext(Record* record) {
     return terminal_result_;
   }
 
+  bytes_consumed_ += kHeaderSize + payload_len;
   return ReadResult::kOk;
 }
 

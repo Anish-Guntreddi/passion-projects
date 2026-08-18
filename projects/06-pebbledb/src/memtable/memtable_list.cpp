@@ -33,4 +33,13 @@ std::shared_ptr<MemTable> MemTableList::Freeze() {
   return frozen;
 }
 
+void MemTableList::RemoveImmutable(const std::shared_ptr<MemTable>& table) {
+  for (auto it = immutables_.begin(); it != immutables_.end(); ++it) {
+    if (*it == table) {
+      immutables_.erase(it);
+      return;
+    }
+  }
+}
+
 }  // namespace pebbledb::memtable

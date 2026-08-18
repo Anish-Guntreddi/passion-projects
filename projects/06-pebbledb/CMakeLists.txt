@@ -48,6 +48,7 @@ add_library(pebbledb_core
   src/util/coding.cpp
   src/util/crc32c.cpp
   src/util/posix_file.cpp
+  src/util/filenames.cpp
   src/wal/record.cpp
   src/wal/writer.cpp
   src/wal/reader.cpp
@@ -56,6 +57,10 @@ add_library(pebbledb_core
   src/sstable/format.cpp
   src/sstable/writer.cpp
   src/sstable/reader.cpp
+  src/manifest/format.cpp
+  src/manifest/manifest.cpp
+  src/bloom/bloom_filter.cpp
+  src/cache/block_cache.cpp
 )
 target_include_directories(pebbledb_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -74,9 +79,8 @@ endif()
 
 # --- Tools -----------------------------------------------------------------
 # tools/inspect_sstable is Phase 3's file-inspector deliverable (spec FR3).
-# tools/pebble_cli (the end-to-end DB CLI) still does not exist yet --
-# persistence is not wired into DB until Phase 4 (see README "What's not
-# here yet").
+# tools/pebble_cli (the end-to-end DB CLI) still does not exist yet
+# (see README "What's not here yet").
 add_subdirectory(tools)
 
 # --- Tests -----------------------------------------------------------------

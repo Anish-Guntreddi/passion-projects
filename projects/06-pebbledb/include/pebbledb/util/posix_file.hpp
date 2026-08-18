@@ -57,6 +57,21 @@ class PosixFile {
   // docs/durability.md — mirroring OpenAppend()'s own rule.
   static Status OpenNew(const std::string& path, std::unique_ptr<PosixFile>* out);
 
+  // Opens `path` for writing, creating it if absent and truncating it to
+  // zero length if it already has content -- unconditionally, with no
+  // "must be absent/empty" check (contrast OpenNew()). This is the right
+  // primitive for a disposable, reused-by-name scratch/staging file (e.g.
+  // manifest::Save()'s "write-new + fsync + atomic rename" temp file,
+  // ADR 0012/D7) that is always meant to be clobbered by the next writer,
+  // as opposed to a file (like an SSTable) where silently overwriting
+  // real prior content would itself be the bug OpenNew() exists to catch.
+  //
+  // If this call creates `path`'s directory entry (it did not already
+  // exist), the containing directory is fsync'd before this returns OK --
+  // same rule as OpenAppend()/OpenNew() (docs/durability.md, "File
+  // creation durability: directory entries").
+  static Status OpenTruncate(const std::string& path, std::unique_ptr<PosixFile>* out);
+
   // Opens `path` read-only. Fails with Status::IOError if the path does
   // not exist.
   static Status OpenRead(const std::string& path, std::unique_ptr<PosixFile>* out);
@@ -102,5 +117,37 @@ class PosixFile {
 
   int fd_ = -1;
 };
+
+// Fsyncs the directory at `dir_path` directly. fsync() on a file
+// descriptor only guarantees that *file's* contents are durable; it does
+// not, on POSIX filesystems, guarantee that a directory entry pointing
+// into that directory (a newly created file, or a name freshly
+// rename()'d into place) survives a crash -- that requires this separate
+// call. OpenAppend()/OpenNew()/OpenTruncate() already call this
+// internally for the "this call created a new directory entry" case;
+// it is exposed here as its own function because some callers need it
+// for an operation this class has no dedicated method for -- e.g.
+// manifest::Save()'s post-rename fsync (ADR 0012/D7): renaming
+// MANIFEST.tmp over MANIFEST changes what the name "MANIFEST" points to,
+// which is exactly the same kind of directory-entry mutation as a brand
+// new file being created, and needs the same durability treatment. See
+// docs/durability.md, "File creation durability: directory entries".
+Status SyncDirectory(const std::string& dir_path);
+
+// Truncates the file at `path` to exactly `length` bytes (POSIX
+// semantics: shrinking discards trailing bytes; `length` must not exceed
+// the file's current size -- this is a "discard untrusted trailing
+// bytes" primitive, never a "grow/pad" one) and fsyncs the result before
+// returning. This is a plain content mutation of an existing file, not a
+// directory-entry creation/replacement, so unlike SyncDirectory() above
+// there is no separate containing-directory fsync to perform.
+//
+// Used by DB::Recover() (see wal::Reader::valid_prefix_length()) to
+// discard an untrusted torn trailing WAL record *before* that file is
+// ever reopened for append: without this, a second unclean shutdown
+// could leave new, valid records concatenated directly after the old
+// torn bytes, which no later replay could safely tell apart from a
+// single corrupted record (docs/durability.md, ADR 0016).
+Status TruncateFile(const std::string& path, std::uint64_t length);
 
 }  // namespace pebbledb::util

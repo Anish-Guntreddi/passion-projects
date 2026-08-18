@@ -221,8 +221,25 @@ Always the file's last 49 bytes.
 | 9 | 8 | `index_block_offset` | `uint64` | Byte offset of the index block. |
 | 17 | 8 | `index_block_size` | `uint64` | Total on-disk size of the index block (entries + its 5-byte trailer). |
 | 25 | 8 | `filter_block_offset` | `uint64` | Byte offset of the filter block. |
-| 33 | 8 | `filter_block_size` | `uint64` | Total on-disk size of the filter block. **Always `0` in this version's writer output** — reserved for Phase 5's Bloom filter (ADR 0009). A reader must treat `size == 0` as "no filter block present", not as an error, and must not attempt to read it. |
+| 33 | 8 | `filter_block_size` | `uint64` | Total on-disk size of the filter block. `0` means "no filter block present" (either `sstable::Writer::Options::filter_bits_per_key == 0` for this table, or a pre-Phase-5 file — ADR 0009); a reader must treat `size == 0` as absent, not as an error, and must not attempt to read it. Otherwise (Phase 5, ADR 0014), a real Bloom filter — see "Filter block content" below. |
 | 41 | 8 | `num_entries` | `uint64` | Total number of entries (live values + tombstones) written to this table. |
+
+### Filter block content (Phase 5, `bloom::BuildFilter`/`KeyMayMatch`)
+
+The filter block is wrapped with the exact same block trailer as a data
+or index block (`sstable::FinishBlock`/`VerifyAndStripBlockTrailer` —
+`compression_type(1) + checksum(4)` appended after the content below),
+so it gets a CRC-32C checksum for free, the same as every other block.
+Design rationale: ADR 0014.
+
+| Offset (within content) | Size | Field | Type | Description |
+|---:|---:|---|---|---|
+| 0 | 1 | `num_probes` | `uint8` | Number of hash probes (k) used to build this filter. |
+| 1 | remaining bytes | `bits` | bytes | The Bloom filter's bit array. |
+
+`filter_block_size` (footer, above) is this content's size plus the
+5-byte block trailer — `0` means absent, exactly like every other
+"reserved, possibly-empty" region in this format.
 
 ### Decode/validation order
 
@@ -247,7 +264,11 @@ Always the file's last 49 bytes.
 ### Worked example
 
 `sstable::Writer::Finish()` for a table containing one entry,
-`Put("k", "v")` at `sequence = 1`:
+`Put("k", "v")` at `sequence = 1`, written with
+`Options::filter_bits_per_key = 0` (filter disabled, reproducing this
+format's original Phase 3 shape exactly — the default, filter-enabled
+case additionally writes a real filter block between the data block and
+the index block; see "Filter block content" above for its layout):
 
 ```
 Data block 0 (entries: 17-byte header + 1-byte key + 1-byte value = 19 bytes;
@@ -285,9 +306,100 @@ Footer (49 bytes, offset 50)
 Total file size: 99 bytes (24-byte data block + 26-byte index block +
 49-byte footer).
 
-## Manifest format
+## Manifest format — format version 1
 
-Not yet implemented (Phase 4 per the roadmap). This section is added,
-with the same field-by-field table format as above, in the same change
-that introduces the format — per spec Part 4 rule 2, a binary-format task
-is not complete until this document is updated.
+Encoding rationale and atomicity approach (spec decision D7): ADR 0012.
+Flush/recovery algorithm that produces and consumes this format: ADR
+0013.
+
+Every multi-byte field is fixed-width and little-endian
+(`util::PutFixed32`/`PutFixed64`), and the *entire file* is covered by
+one CRC-32C checksum — reusing the WAL/SSTable formats' conventions
+above (ADR 0007/ADR 0010), but applied here to a whole small file at
+once rather than to individual records/blocks, since (unlike the WAL, an
+append-only log, or an SSTable, many independent blocks) there is
+exactly one manifest per DB directory, always read and written whole.
+
+### File layout
+
+```
+[header, 37 bytes] [table entry 0] [table entry 1] ... [table entry N-1]
+```
+
+There is no separate footer/trailer — the header is a fixed leading
+block (unlike the WAL/SSTable formats' self-describing-trailer-at-the-end
+shape) because the manifest is always read in full before any of it is
+used; there is no benefit here to a footer-first, seek-directly-to-the-end
+access pattern.
+
+### Header (37 bytes, `manifest::kHeaderSize`)
+
+| Offset | Size | Field | Type | Description |
+|---:|---:|---|---|---|
+| 0 | 4 | `checksum` | `uint32` | CRC-32C over every byte from offset 4 (`magic`) through the end of the last table entry — every field below plus every table entry, but not this field itself. |
+| 4 | 4 | `magic` | `uint32` | Constant `manifest::kMagic` = `0x50424D46` — read as big-endian bytes `50 42 4D 46`, spelling ASCII `"PBMF"` ("PebbleDB Manifest Format"), the same hex-dump-mnemonic convention as the WAL's `"PBK1"` and the SSTable's `"PBST"`. A mismatch is `DecodeStatus::kBadMagic`. |
+| 8 | 1 | `format_version` | `uint8` | Constant `manifest::kFormatVersion` = `1` for this document. `0` or greater than the reader's `kFormatVersion` is `DecodeStatus::kUnsupportedVersion` — checked before `num_tables` and before the checksum, mirroring the WAL/SSTable formats' validation order. |
+| 9 | 8 | `next_file_number` | `uint64` | Next file number to allocate for a new on-disk file (a WAL segment or an SSTable) — see `util/filenames.hpp` and ADR 0013. |
+| 17 | 8 | `wal_file_number` | `uint64` | File number of the WAL segment that must be replayed, after loading this manifest, to reconstruct any writes durable in the WAL but not yet captured in an SSTable. `0` means no WAL has been allocated yet (only possible for a manifest this project's own code never actually writes to disk — `DB::Recover()`'s "fresh DB" path always allocates and records a WAL before its first `SaveManifest()` call — ADR 0013). |
+| 25 | 8 | `last_sequence` | `uint64` | Highest write sequence number (ADR 0005) known durable as of this manifest snapshot. |
+| 33 | 4 | `num_tables` | `uint32` | Number of table entries that follow. Must be `<= manifest::kMaxTableCount` (2²⁰); a corrupted value exceeding that bound is rejected (`DecodeStatus::kBadTableCount`) *before* it is ever used to compute an expected file size — see "Decode/validation order" below and ADR 0012. |
+
+### Table entries (12 bytes each, `manifest::kTableEntrySize`)
+
+| Offset (within entry) | Size | Field | Type | Description |
+|---:|---:|---|---|---|
+| 0 | 8 | `file_number` | `uint64` | The SSTable's file number — see `util::SstableFileName`. |
+| 8 | 4 | `level` | `uint32` | Always `0` in this version's writer output — reserved for a future Phase 6 compaction's leveling, exactly as the SSTable footer's `filter_handle` was reserved for Phase 5 before Phase 5 existed (ADR 0009). A reader must not reject a nonzero value outright. |
+
+Table entries are stored **oldest-flushed-first** (the order tables were
+added to the manifest across successive flushes — `DB::FlushLocked()`
+always appends the newly published table to the end of the list). A
+reader resolving a point lookup must consult them **newest-first** (i.e.
+iterate the stored list in reverse) — `DB::Get()` does exactly this over
+`tables_`, which mirrors `manifest_.tables`'s order 1:1.
+
+### Decode/validation order
+
+1. **Structural fields** — `magic`, then `format_version`, checked
+   before anything else (mirrors the WAL/SSTable formats).
+2. **`num_tables` against `kMaxTableCount`** — checked *before* it is
+   used to compute the buffer's expected total size, so a corrupted
+   `num_tables` field (e.g. a flipped high bit) fails fast instead of
+   computing a bogus expected size or driving an unbounded read/allocation
+   downstream — the same "sanity-bound a length field before trusting
+   it" discipline as `wal::kMaxKeyLength`/`kMaxValueLength` (ADR 0006)
+   and `sstable::Reader`'s `BlockHandle` bounds checks (ADR 0011).
+3. **Buffer size against the now-trusted expected size** — `kHeaderSize
+   + num_tables * kTableEntrySize`. A buffer shorter than this is
+   `kTruncated`; a buffer *longer* than this is `kBadLength` — the
+   manifest is a whole-file format, not an appendable log, so trailing
+   extra bytes are exactly as invalid as a short file (contrast the WAL,
+   where trailing bytes are simply "not yet read").
+4. **Checksum** — computed last, since it needs the now-trusted-length
+   buffer fully in hand (the manifest's checksum coverage length itself
+   depends on `num_tables`, a field not yet checksum-verified when step 2
+   runs — the same bootstrapping problem the WAL's `key_length`/
+   `value_length` already solve the same way).
+
+### Worked example
+
+`manifest::EncodeManifest()` for `next_file_number = 4`,
+`wal_file_number = 3`, `last_sequence = 5`, one table entry
+(`file_number = 2`, `level = 0`):
+
+```
+offset  0   fe fc f5 0c                   checksum
+offset  4   46 4d 42 50                   magic (0x50424D46, little-endian)
+offset  8   01                            format_version = 1
+offset  9   04 00 00 00 00 00 00 00       next_file_number = 4
+offset 17   03 00 00 00 00 00 00 00       wal_file_number = 3
+offset 25   05 00 00 00 00 00 00 00       last_sequence = 5
+offset 33   01 00 00 00                   num_tables = 1
+offset 37   02 00 00 00 00 00 00 00       table[0].file_number = 2
+offset 45   00 00 00 00                   table[0].level = 0
+```
+
+Total size: 49 bytes (37-byte header + one 12-byte table entry) — these
+exact bytes were produced by running the real `EncodeManifest()`
+implementation, not hand-computed, so the checksum bytes above are
+authoritative for anyone hand-verifying a real on-disk manifest.

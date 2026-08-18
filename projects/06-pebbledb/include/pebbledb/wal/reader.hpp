@@ -56,12 +56,31 @@ class Reader {
   // in order, until a non-kOk result is reached.
   ReplayResult Replay(const std::function<void(const Record&)>& on_record);
 
+  // The file offset immediately after the last successfully-decoded
+  // (kOk) record -- i.e. how many leading bytes of the file are actually
+  // trusted so far. Every byte from this offset onward is whatever
+  // produced the current terminal ReadResult: fully trusted (kEndOfLog:
+  // there simply is nothing more), or specifically *not* trusted
+  // (kTruncated/kCorruption/kUnsupportedVersion).
+  //
+  // A caller that is about to reopen this same file for continued
+  // appending after a kTruncated terminal result (the only one recovery
+  // treats as non-fatal — docs/durability.md) MUST first truncate the
+  // file down to this length (see util::TruncateFile). Skipping that
+  // truncation leaves the untrusted torn bytes in place; a second
+  // unclean shutdown could then leave new, valid records concatenated
+  // directly after them, which no future replay can safely tell apart
+  // from a single corrupted record — see ADR 0016 and
+  // DB::Recover().
+  std::uint64_t valid_prefix_length() const { return bytes_consumed_; }
+
  private:
   explicit Reader(std::unique_ptr<util::PosixFile> file) : file_(std::move(file)) {}
 
   std::unique_ptr<util::PosixFile> file_;
   bool exhausted_ = false;
   ReadResult terminal_result_ = ReadResult::kEndOfLog;
+  std::uint64_t bytes_consumed_ = 0;
 };
 
 }  // namespace pebbledb::wal

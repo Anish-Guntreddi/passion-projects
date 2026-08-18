@@ -1,5 +1,7 @@
 #include "pebbledb/sstable/writer.hpp"
 
+#include "pebbledb/bloom/bloom_filter.hpp"
+
 namespace pebbledb::sstable {
 
 Status Writer::Open(const std::string& path, const Options& options,
@@ -27,6 +29,10 @@ Status Writer::Add(Slice key, Slice value, std::uint64_t sequence, EntryType typ
               &current_block_entries_);
   last_key_in_current_block_.assign(key.data(), key.size());
   current_block_has_entries_ = true;
+
+  if (options_.filter_bits_per_key > 0) {
+    keys_for_filter_.emplace_back(key);
+  }
 
   last_key_added_.assign(key.data(), key.size());
   has_added_any_ = true;
@@ -76,11 +82,29 @@ Status Writer::Finish() {
     return s;
   }
 
-  // Filter block: reserved for Phase 5's Bloom filter, zero-length in
-  // this version -- see ADR 0009. Its offset is exactly where a real
-  // filter block would start (right after the last data block); its size
-  // (0) is what tells a reader nothing is actually there.
-  const BlockHandle filter_handle{file_offset_, 0};
+  // Filter block (spec FR3, roadmap Phase 5; ADR 0009/ADR 0014). Its
+  // offset is exactly where the block starts, right after the last data
+  // block; a real, non-empty filter is built and written here when
+  // filtering is enabled and at least one key was added, otherwise this
+  // stays the same zero-length "nothing here" region every pre-Phase-5
+  // table already had -- a reader must treat size == 0 as "absent," not
+  // as an error, either way.
+  BlockHandle filter_handle{file_offset_, 0};
+  if (!keys_for_filter_.empty()) {
+    const bloom::FilterPolicy policy{options_.filter_bits_per_key};
+    const std::string filter_content = bloom::BuildFilter(keys_for_filter_, policy);
+    if (!filter_content.empty()) {
+      std::string filter_block_bytes;
+      const std::size_t filter_written = FinishBlock(filter_content, &filter_block_bytes);
+      s = file_->Append(filter_block_bytes);
+      if (!s.ok()) {
+        finished_ = true;
+        return s;
+      }
+      filter_handle.size = filter_written;
+      file_offset_ += filter_written;
+    }
+  }
 
   std::string index_block_bytes;
   const std::size_t index_written = FinishBlock(index_block_, &index_block_bytes);

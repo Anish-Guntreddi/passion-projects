@@ -2,6 +2,7 @@
 
 #include <unistd.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
@@ -127,6 +128,22 @@ void CorruptByteAt(const std::string& path, std::int64_t byte_offset, unsigned c
     throw std::runtime_error("write failed while corrupting byte " +
                               std::to_string(byte_offset) + " of " + path);
   }
+}
+
+TempDir::TempDir() {
+  std::string tmpl = (std::filesystem::temp_directory_path() / "pebbledb_test_dir_XXXXXX").string();
+  std::vector<char> buf(tmpl.begin(), tmpl.end());
+  buf.push_back('\0');
+
+  if (::mkdtemp(buf.data()) == nullptr) {
+    throw std::runtime_error("mkdtemp failed while reserving a temp directory");
+  }
+  path_ = buf.data();
+}
+
+TempDir::~TempDir() {
+  std::error_code ec;
+  std::filesystem::remove_all(path_, ec);  // best-effort; ignore failures
 }
 
 }  // namespace pebbledb::testutil

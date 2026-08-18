@@ -13,19 +13,23 @@ namespace pebbledb::util {
 namespace {
 std::string ErrnoMessage(const std::string& what) { return what + ": " + std::strerror(errno); }
 
-// Fsyncs the directory containing `path`. fsync() on a file descriptor
-// only guarantees that *file's* contents are durable; on POSIX
-// filesystems it does not by itself guarantee that the directory entry
-// pointing to a brand-new file survives a crash -- that requires a
-// separate fsync() of the containing directory. See docs/durability.md,
-// "File creation durability: directory entries", and ADR 0006.
+// Fsyncs the directory containing `path` -- the "did this call just
+// create a new directory entry" case every Open*() factory needs. Thin
+// wrapper around the public SyncDirectory() below, which does the actual
+// fsync and is also called directly by callers outside this file (e.g.
+// manifest::Save()'s post-rename fsync) that already have a directory
+// path in hand rather than a file path to derive one from.
 Status SyncContainingDirectory(const std::string& path) {
   std::filesystem::path parent = std::filesystem::path(path).parent_path();
   const std::string dir = parent.empty() ? "." : parent.string();
+  return SyncDirectory(dir);
+}
+}  // namespace
 
-  int dir_fd = ::open(dir.c_str(), O_RDONLY);
+Status SyncDirectory(const std::string& dir_path) {
+  int dir_fd = ::open(dir_path.c_str(), O_RDONLY);
   if (dir_fd < 0) {
-    return Status::IOError(ErrnoMessage("open (directory) failed for '" + dir + "'"));
+    return Status::IOError(ErrnoMessage("open (directory) failed for '" + dir_path + "'"));
   }
   int rc;
   do {
@@ -35,11 +39,43 @@ Status SyncContainingDirectory(const std::string& path) {
   ::close(dir_fd);
   if (rc != 0) {
     errno = saved_errno;
-    return Status::IOError(ErrnoMessage("fsync (directory) failed for '" + dir + "'"));
+    return Status::IOError(ErrnoMessage("fsync (directory) failed for '" + dir_path + "'"));
   }
   return Status::OK();
 }
-}  // namespace
+
+Status TruncateFile(const std::string& path, std::uint64_t length) {
+  // O_WRONLY (not O_APPEND, not O_CREAT): this call operates on an
+  // already-existing file only -- a missing path is a genuine error here,
+  // never something to silently create (see this function's doc comment;
+  // its one caller only ever targets a WAL segment DB::Recover() just
+  // finished replaying).
+  int fd = ::open(path.c_str(), O_WRONLY);
+  if (fd < 0) {
+    return Status::IOError(ErrnoMessage("open (truncate-to-length) failed for '" + path + "'"));
+  }
+
+  int rc = ::ftruncate(fd, static_cast<off_t>(length));
+  if (rc != 0) {
+    const int saved_errno = errno;
+    ::close(fd);
+    errno = saved_errno;
+    return Status::IOError(ErrnoMessage("ftruncate failed for '" + path + "'"));
+  }
+
+  do {
+    rc = ::fsync(fd);
+  } while (rc != 0 && errno == EINTR);
+  if (rc != 0) {
+    const int saved_errno = errno;
+    ::close(fd);
+    errno = saved_errno;
+    return Status::IOError(ErrnoMessage("fsync failed for '" + path + "'"));
+  }
+
+  ::close(fd);
+  return Status::OK();
+}
 
 Status PosixFile::OpenAppend(const std::string& path, std::unique_ptr<PosixFile>* out) {
   // Stat before O_CREAT so we know whether this call is the one creating
@@ -109,6 +145,31 @@ Status PosixFile::OpenNew(const std::string& path, std::unique_ptr<PosixFile>* o
     // A new directory entry was just created for `path` -- fsync the
     // containing directory before reporting success, same as
     // OpenAppend()'s "did this call create a new entry" case.
+    Status dir_status = SyncContainingDirectory(path);
+    if (!dir_status.ok()) {
+      ::close(fd);
+      return dir_status;
+    }
+  }
+
+  out->reset(new PosixFile(fd));
+  return Status::OK();
+}
+
+Status PosixFile::OpenTruncate(const std::string& path, std::unique_ptr<PosixFile>* out) {
+  struct stat existing_stat {};
+  const bool existed_before = (::stat(path.c_str(), &existing_stat) == 0);
+
+  // Unconditional create-or-truncate: unlike OpenNew(), pre-existing
+  // content is never an error here -- it is simply discarded. This is
+  // the correct primitive for a disposable, reused-by-name scratch file
+  // (see this method's header comment).
+  int fd = ::open(path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644);
+  if (fd < 0) {
+    return Status::IOError(ErrnoMessage("open (truncate) failed for '" + path + "'"));
+  }
+
+  if (!existed_before) {
     Status dir_status = SyncContainingDirectory(path);
     if (!dir_status.ok()) {
       ::close(fd);

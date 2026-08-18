@@ -62,6 +62,16 @@ class MemTableList {
   // further Put/Delete/Freeze calls made afterward.
   std::shared_ptr<MemTable> Freeze();
 
+  // Removes `table` from the immutable list -- used once its data has
+  // been durably captured elsewhere (Phase 4: flushed into an SSTable and
+  // recorded in the manifest) and no longer needs to be kept resident in
+  // RAM. A no-op if `table` is not currently present (e.g. it was already
+  // removed, or points at some other MemTable entirely); this is
+  // deliberately tolerant rather than asserting -- double-removal is
+  // harmless, not a bug worth crashing a synchronous, single-writer flush
+  // path over.
+  void RemoveImmutable(const std::shared_ptr<MemTable>& table);
+
   const MemTable& active() const { return *active_; }
   std::size_t ActiveApproximateMemoryUsage() const { return active_->ApproximateMemoryUsage(); }
   bool ActiveShouldFlush(std::size_t size_threshold_bytes) const {

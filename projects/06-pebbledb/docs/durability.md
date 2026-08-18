@@ -163,17 +163,138 @@ which matters for durability bookkeeping specifically: `Writer`'s
 being true if `Open()` ever appended to genuinely pre-existing content
 instead of failing outright.
 
-This project does not yet have a component that decides *when* to call
-`Finish()` and then discards the MemTable data that table was flushed from
-(that coordination — a flush routine, wired into `DB`, that only clears
-WAL/MemTable state after a table's `Finish()` has actually returned `OK` —
-is Phase 4's "manifest never intentionally references a partially
-published table" concern, spec invariant 5). Phase 3's `Writer`/`Reader`
-are deliberately silent on that question: `Writer::Finish()` either fully
-succeeds (whole table durable) or returns a non-OK `Status` (nothing after
-that point is guaranteed durable, and the caller must not treat the table
-as usable) — there is no partial-success state a caller could observe and
-mistake for a complete table.
+Phase 3's `Writer`/`Reader` are deliberately silent on *when* to call
+`Finish()` and then discard the MemTable data that table was flushed
+from — `Writer::Finish()` either fully succeeds (whole table durable) or
+returns a non-OK `Status` (nothing after that point is guaranteed
+durable, and the caller must not treat the table as usable); there is no
+partial-success state a caller could observe and mistake for a complete
+table. That coordination is Phase 4's `DB::FlushLocked()` — see the next
+section.
+
+## Manifest and flush durability (Phase 4)
+
+Full algorithm: ADR 0013. This section states the durability contract
+specifically.
+
+**Manifest atomicity (spec decision D7, ADR 0012).**
+`manifest::SaveManifest()` writes the new manifest content to a
+temporary file, `fsync()`s it, `rename()`s it over the real `MANIFEST`
+path (atomic on the same filesystem — a concurrent opener of `MANIFEST`
+always sees either the complete old file or the complete new one, never
+a mix), then `fsync()`s the containing directory (the rename mutated a
+directory entry — "what `MANIFEST` points to" changed — which needs the
+exact same directory-fsync treatment as a brand-new file's creation,
+above). `SaveManifest()` returning `OK` is the precise point at which
+the new manifest content becomes the durable, recoverable truth.
+
+**Invariant 5, mechanically enforced by ordering.** `DB::FlushLocked()`
+never calls `SaveManifest()` until the SSTable it is about to reference
+has already had `Writer::Finish()` return `OK` — i.e. until that table
+is already durably complete on disk (per the SSTable durability
+guarantee above). If anything *before* that point fails (the SSTable
+write itself), nothing has been published and nothing needs to be
+undone — the MemTable being flushed is simply still resident, still
+readable, and still backed by its still-intact WAL segment, exactly as
+before the failed `Flush()` call. If `SaveManifest()` itself then fails
+*after* the SSTable is complete, the table exists on disk but is
+referenced by nothing — a harmless orphan, not a correctness problem
+(nothing in this project's own code ever opens a table it did not find
+listed in a successfully loaded manifest).
+
+**"Recovered-WAL clearing."** Once every currently-pending immutable
+MemTable has been published this way — there can be more than one in a
+single `FlushLocked()` call, see ADR 0016 below — `DB::FlushLocked()`
+rotates to a new WAL and deletes the WAL segment that flush superseded.
+This delete happens strictly *after* every one of those publishes, and
+is itself best-effort (a failed delete leaves a harmless orphan file —
+nothing ever reopens a WAL segment the current manifest does not point
+at). This is why a flush failure never loses data: the old WAL is only
+ever removed once *everything* it might contain is proven durable
+somewhere else first.
+
+**ADR 0016 — three crash-safety fixes found in this phase's original
+implementation, post-review.**
+
+1. *A flush retry must account for writes made in between.* An earlier
+   version of `FlushLocked()` resumed a retry from only the single
+   oldest still-frozen immutable MemTable, not anything that had since
+   accumulated in the active MemTable. Because the WAL was only rotated
+   *after* a successful publish, a write acknowledged between a failed
+   flush attempt and a later successful retry was logged only into the
+   same WAL segment that retry's eventual success then deleted as
+   "superseded" — silently losing it. Fix: `FlushLocked()` now
+   unconditionally freezes whatever is active at the start of every
+   call (potentially producing a second, third, ... immutable MemTable
+   across repeated failed attempts) and drains *every* pending immutable
+   — oldest first, each into its own SSTable + manifest publish — before
+   ever rotating or deleting the WAL. Regression test:
+   `tests/recovery/test_manifest_recovery.cpp`'s
+   `FlushRetryWithInterveningWritesLosesNoAcknowledgedData`.
+2. *A torn WAL tail must be truncated before being reopened for append.*
+   `Recover()` previously reopened a WAL for append immediately after
+   replaying past a torn trailing record (`kTruncated`), without first
+   discarding those untrusted bytes. A second unclean shutdown could
+   then leave new, valid records concatenated directly after the old
+   torn ones, which no later replay can safely tell apart from a single
+   corrupted record — permanently failing `Open()` for the whole
+   database. Fix: `wal::Reader::valid_prefix_length()` reports how many
+   leading bytes of the file were actually trusted (i.e. successfully
+   decoded), and `Recover()` calls `util::TruncateFile()` to shrink the
+   WAL to exactly that length *before* reopening it for append whenever
+   the replay terminal was `kTruncated`. Regression test:
+   `tests/corruption/test_manifest_corruption.cpp`'s
+   `SecondUncleanShutdownAfterATornTailStillOpensCleanlyAndRecoversNewWrites`.
+3. *A post-rename directory-fsync failure is not "nothing happened."*
+   `manifest::SaveManifest()`'s failure return did not previously
+   distinguish "the `rename()` itself never happened" (the on-disk
+   manifest is genuinely unchanged) from "`rename()` succeeded, only the
+   trailing directory-fsync afterward failed" (the on-disk manifest
+   already *is* the new content). A caller treating both cases as
+   "nothing happened" could keep operating on stale in-memory state
+   already superseded on disk — the same class of bug as #1, via a third
+   door. Fix: `SaveManifest()` takes an optional `bool* published`
+   out-param, set to `true` the moment `rename()` succeeds regardless of
+   what happens after; `FlushLocked()` (and `Recover()`'s fresh-DB path,
+   where the same risk does not apply — see its own inline comment)
+   adopts the new manifest state whenever `published` is `true`, even on
+   an otherwise-non-OK return, rather than only on a fully-`OK` one.
+   Regression tests: `tests/recovery/test_manifest_recovery.cpp`'s
+   `SaveManifestPublishedIsFalseWhenRenameNeverHappens` and
+   `SaveManifestPublishedIsTrueOnFullSuccess`. The specific "`rename()`
+   succeeds but the trailing directory-fsync then fails" interior
+   timing is not itself fault-injected (no portable, deterministic way
+   to force a directory `fsync()` to fail from inside a hosted test
+   without root — the same boundary this document's "What this test
+   suite verifies, and what it cannot" section already draws around real
+   kernel/power-loss behavior); the `published` contract itself and both
+   of its outcomes are.
+
+**Recovery (`DB::Recover()`, called from `DB::Open()`).** A missing
+manifest means "fresh DB, start from nothing" (not an error). A manifest
+that exists but fails to decode is fatal — `Open()` returns
+`Status::Corruption` rather than guessing at a partial or best-effort
+recovery (this project's manifest write path is designed so this should
+never happen from an ordinary crash — see ADR 0012 — so seeing it means
+external corruption, not a workload this project's own crash-safety
+covers). The WAL segment the loaded (or freshly created) manifest points
+at is replayed exactly per this document's existing WAL recovery
+contract above: everything before a torn trailing record (`kTruncated`)
+replays normally; a fully-written-but-corrupted record (`kCorruption`)
+is fatal to `Open()`, consistent with the WAL's own no-resynchronization
+policy (ADR 0006) applied one layer up.
+
+**What this test suite verifies, and what it cannot (Phase 4
+extension).** `tests/integration/test_db_persistence.cpp` and
+`tests/recovery/test_manifest_recovery.cpp` use the same "destroy the
+`DB` object with no special shutdown step, then open a brand-new one on
+the same directory" simulated-restart pattern this document's WAL
+section already establishes — not a real kernel/power-loss event, for
+the same reasons that document already states. `test_manifest_recovery.cpp`
+additionally *fault-injects* specific failures (blocking a target path
+with a directory so a specific `open()`/`rename()` call fails
+deterministically) to exercise the ordering guarantees above directly,
+rather than only their happy path.
 
 ## Benchmark labeling (spec §1.9)
 

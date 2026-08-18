@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "pebbledb/entry_type.hpp"
 #include "pebbledb/slice.hpp"
@@ -36,6 +37,13 @@ class Writer {
     // being split, so an individual block's on-disk size can exceed this
     // target.
     std::size_t target_block_size_bytes = 4096;
+
+    // Target bits per key for this table's Bloom filter block (spec FR3,
+    // roadmap Phase 5; ADR 0014). 0 disables filter generation entirely
+    // -- Finish() then emits the same zero-length, reserved filter block
+    // every pre-Phase-5 table already had (ADR 0009). Default 10 matches
+    // bloom::FilterPolicy's own default (~1% false-positive rate).
+    std::size_t filter_bits_per_key = 10;
   };
 
   // Creates the SSTable file at `path` for writing. `path` must not
@@ -65,13 +73,16 @@ class Writer {
   // zero-length), exactly like a WAL kDelete record ignores its value.
   Status Add(Slice key, Slice value, std::uint64_t sequence, EntryType type);
 
-  // Flushes any partially-filled data block, writes the (always
-  // zero-length in this version -- see ADR 0009) filter block region,
-  // the index block, and the footer, then fsyncs the file. Add() must
-  // not be called after Finish() returns (whether it returned OK or an
-  // error); Finish() itself must not be called more than once. Calling
-  // either after a successful Finish() returns Status::InvalidArgument
-  // without touching the file again.
+  // Flushes any partially-filled data block, builds and writes the
+  // filter block (real Bloom-filter content when
+  // options.filter_bits_per_key > 0 and at least one entry was added;
+  // the same zero-length, reserved region as every pre-Phase-5 table
+  // otherwise -- ADR 0009/ADR 0014), the index block, and the footer,
+  // then fsyncs the file. Add() must not be called after Finish()
+  // returns (whether it returned OK or an error); Finish() itself must
+  // not be called more than once. Calling either after a successful
+  // Finish() returns Status::InvalidArgument without touching the file
+  // again.
   Status Finish();
 
   std::uint64_t entries_written() const { return entries_written_; }
@@ -91,6 +102,12 @@ class Writer {
 
   std::string index_block_;        // accumulated encoded IndexEntry bytes
   std::uint64_t file_offset_ = 0;  // bytes appended so far (append-only; tracked ourselves)
+
+  // Every key Add()ed so far, in order -- input to bloom::BuildFilter()
+  // at Finish() (ADR 0014). Only populated when
+  // options_.filter_bits_per_key > 0, to avoid the memory cost when
+  // filter generation is disabled.
+  std::vector<std::string> keys_for_filter_;
 
   std::string last_key_added_;
   bool has_added_any_ = false;

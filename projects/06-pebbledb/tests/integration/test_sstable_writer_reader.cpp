@@ -268,14 +268,38 @@ TEST(SstableWriterReader, EmptyTableIsValidAndReopens) {
   EXPECT_EQ(result, LookupResult::kNotFound);
 }
 
-TEST(SstableWriterReader, FilterHandleIsAlwaysAbsentInThisVersion) {
+// Phase 3-era behavior (ADR 0009): the filter block was *always* absent,
+// unconditionally. Phase 5 (ADR 0014) makes filter generation the
+// default (Writer::Options::filter_bits_per_key defaults to 10) -- see
+// FilterHandleIsPresentByDefault below for that case. The filter block
+// is still absent when explicitly disabled (filter_bits_per_key == 0),
+// which is what this test now covers -- the "reserved, size == 0 means
+// absent" footer contract itself is unchanged either way.
+TEST(SstableWriterReader, FilterHandleIsAbsentWhenFilterDisabled) {
+  TempFile file;
+  std::vector<SampleEntry> entries = BuildSampleEntries(10);
+  Writer::Options options;
+  options.filter_bits_per_key = 0;
+  WriteSampleTable(file.path(), entries, options);
+
+  std::unique_ptr<Reader> reader;
+  ASSERT_TRUE(Reader::Open(file.path(), &reader).ok());
+  EXPECT_EQ(reader->footer().filter_handle.size, 0u);
+  EXPECT_FALSE(reader->has_filter());
+}
+
+// Phase 5 (spec FR3, roadmap Phase 5; ADR 0014): Writer::Options's
+// default (filter_bits_per_key == 10) produces a real, non-empty filter
+// block that Reader::Open() loads.
+TEST(SstableWriterReader, FilterHandleIsPresentByDefault) {
   TempFile file;
   std::vector<SampleEntry> entries = BuildSampleEntries(10);
   WriteSampleTable(file.path(), entries);
 
   std::unique_ptr<Reader> reader;
   ASSERT_TRUE(Reader::Open(file.path(), &reader).ok());
-  EXPECT_EQ(reader->footer().filter_handle.size, 0u);
+  EXPECT_GT(reader->footer().filter_handle.size, 0u);
+  EXPECT_TRUE(reader->has_filter());
 }
 
 TEST(SstableWriterReader, LargeKeyAndValueRoundTrip) {

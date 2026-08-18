@@ -1,6 +1,8 @@
 # ADR 0009: SSTable block size and compression (spec decision D5)
 
-- **Status:** Accepted
+- **Status:** Accepted (filter-block reservation superseded by ADR 0014
+  at Phase 5 — see note at the end of this document; block size and
+  compression decisions below are unaffected and remain current)
 - **Phase:** 3 (SSTable)
 - **Spec decision:** D5 — "Table block size / compression" — default per
   spec §1.10: **4 KB blocks; compression is stretch.**
@@ -100,9 +102,25 @@ format version to design, document, and test migration for.
 - Every SSTable this version's `Writer` produces has `filter_block.size ==
   0`; `tools/inspect_sstable` prints `(absent -- reserved for Phase 5's
   Bloom filter)` next to that field specifically so this is visible, not
-  silently implied, when inspecting a real file.
+  silently implied, when inspecting a real file. **(Historical — see the
+  note below.)**
 - Snappy/Zstd block compression, prefix/key compression, and a skip-list
   MemTable (ADR 0008) remain the documented stretch goals they were before
   this ADR (spec Part 3) — nothing here implements them, only reserves
   the on-disk room for compression to be added later without a format
   break.
+
+## Update (Phase 5) — filter block reservation superseded by ADR 0014
+
+As anticipated by this ADR's own "Decision — filter block: reserved,
+always empty in this version" section, Phase 5 (`docs/decisions/0014-bloom-filter-design.md`)
+fills that region with real Bloom filter content — exactly the
+content-only, no-layout-change, no-`format_version`-bump extension this
+ADR predicted. `sstable::Writer::Options::filter_bits_per_key` now
+defaults to 10 (a real filter is built and written by default);
+`filter_bits_per_key == 0` reproduces this ADR's original "always empty"
+behavior exactly. `tools/inspect_sstable`'s "(absent -- reserved for
+Phase 5's Bloom filter)" message referenced above is itself superseded —
+see ADR 0014's Consequences section for the current output. This note is
+appended rather than rewriting the sections above, which remain an
+accurate historical record of the Phase 3 decision as originally made.

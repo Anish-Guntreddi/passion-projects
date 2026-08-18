@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "pebbledb/bloom/bloom_filter.hpp"
+
 namespace pebbledb::sstable {
 
 namespace {
@@ -43,7 +45,8 @@ Status ValidateHandleInBounds(const BlockHandle& handle, std::uint64_t file_size
 
 }  // namespace
 
-Status Reader::Open(const std::string& path, std::unique_ptr<Reader>* out) {
+Status Reader::Open(const std::string& path, std::unique_ptr<Reader>* out, cache::BlockCache* cache,
+                     std::uint64_t file_id) {
   std::unique_ptr<util::PosixFile> file;
   Status s = util::PosixFile::OpenRead(path, &file);
   if (!s.ok()) {
@@ -78,14 +81,13 @@ Status Reader::Open(const std::string& path, std::unique_ptr<Reader>* out) {
   std::unique_ptr<Reader> reader(new Reader(std::move(file)));
   reader->footer_ = footer;
   reader->file_size_ = file_size;
+  reader->cache_ = cache;
+  reader->file_id_ = file_id;
 
   // Validate both footer-declared handles against the file's real size
   // now, at Open() time, rather than letting a corrupted-but-checksum-
   // valid one reach ReadBlock()/ReadAt() later with an out-of-range
-  // size. filter_handle is never actually read in this version (always
-  // zero-length -- ADR 0009), but a corrupted footer could still declare
-  // a bogus non-zero one, so it is validated here for the same reason
-  // index_handle is, even though nothing downstream currently reads it.
+  // size.
   s = ValidateHandleInBounds(footer.index_handle, file_size, "sstable index handle");
   if (!s.ok()) {
     return s;
@@ -112,6 +114,24 @@ Status Reader::Open(const std::string& path, std::unique_ptr<Reader>* out) {
       }
       reader->index_.push_back(std::move(entry));
     }
+  }
+
+  // Filter block (Phase 5; ADR 0009/ADR 0014): zero-length means "no
+  // filter present" (every pre-Phase-5 table, or a Phase-5 table written
+  // with filter_bits_per_key == 0), left as reader->filter_'s
+  // default-constructed empty string -- has_filter() and Get()'s filter
+  // check both already treat "empty" as "nothing to consult." A
+  // non-zero handle is loaded eagerly here, same as the index block
+  // above, so filter-block corruption is caught at Open() time rather
+  // than resurfacing unpredictably on some later Get() call.
+  if (footer.filter_handle.size > 0) {
+    std::string raw_filter;
+    std::string_view filter_entries_view;
+    s = reader->ReadBlock(footer.filter_handle, &raw_filter, &filter_entries_view);
+    if (!s.ok()) {
+      return s;
+    }
+    reader->filter_.assign(filter_entries_view.data(), filter_entries_view.size());
   }
 
   *out = std::move(reader);
@@ -148,8 +168,47 @@ Status Reader::ReadBlock(const BlockHandle& handle, std::string* raw_block,
   return Status::OK();
 }
 
+Status Reader::ReadDataBlock(const BlockHandle& handle, std::string* entries_owned) const {
+  if (cache_ != nullptr) {
+    if (cache_->Lookup(file_id_, handle.offset, entries_owned)) {
+      cache_hits_.fetch_add(1, std::memory_order_relaxed);
+      return Status::OK();
+    }
+  }
+
+  std::string raw_block;
+  std::string_view entries_view;
+  Status s = ReadBlock(handle, &raw_block, &entries_view);
+  if (!s.ok()) {
+    return s;
+  }
+  data_blocks_read_.fetch_add(1, std::memory_order_relaxed);
+  entries_owned->assign(entries_view.data(), entries_view.size());
+
+  if (cache_ != nullptr) {
+    cache_misses_.fetch_add(1, std::memory_order_relaxed);
+    // Cache exactly the verified, trailer-stripped bytes just produced
+    // above -- a future hit skips both the pread and the re-verification
+    // (ADR 0015).
+    cache_->Insert(file_id_, handle.offset, *entries_owned);
+  }
+  return Status::OK();
+}
+
 Status Reader::Get(Slice key, LookupResult* result, std::string* value,
                     std::uint64_t* sequence) const {
+  if (!filter_.empty()) {
+    filter_checks_.fetch_add(1, std::memory_order_relaxed);
+    if (!bloom::KeyMayMatch(key, filter_)) {
+      // Definite absence (no false negatives -- see bloom_filter.hpp):
+      // skip the index search and data-block read entirely. This is the
+      // "negative-read filtering" roadmap Phase 5 exit criterion.
+      filter_rejections_.fetch_add(1, std::memory_order_relaxed);
+      *result = LookupResult::kNotFound;
+      return Status::OK();
+    }
+  }
+
   auto it = std::lower_bound(
       index_.begin(), index_.end(), key,
       [](const IndexEntry& entry, Slice target) { return Slice(entry.last_key) < target; });
@@ -158,12 +217,12 @@ Status Reader::Get(Slice key, LookupResult* result, std::string* value,
     return Status::OK();
   }
 
-  std::string raw_block;
-  std::string_view entries_view;
-  Status s = ReadBlock(it->handle, &raw_block, &entries_view);
+  std::string entries_owned;
+  Status s = ReadDataBlock(it->handle, &entries_owned);
   if (!s.ok()) {
     return s;
   }
+  std::string_view entries_view = entries_owned;
 
   while (!entries_view.empty()) {
     Entry entry;
@@ -194,12 +253,12 @@ Status Reader::Get(Slice key, LookupResult* result, std::string* value,
 
 Status Reader::ForEachEntry(const EntryCallback& callback) const {
   for (const IndexEntry& index_entry : index_) {
-    std::string raw_block;
-    std::string_view entries_view;
-    Status s = ReadBlock(index_entry.handle, &raw_block, &entries_view);
+    std::string entries_owned;
+    Status s = ReadDataBlock(index_entry.handle, &entries_owned);
     if (!s.ok()) {
       return s;
     }
+    std::string_view entries_view = entries_owned;
 
     while (!entries_view.empty()) {
       Entry entry;

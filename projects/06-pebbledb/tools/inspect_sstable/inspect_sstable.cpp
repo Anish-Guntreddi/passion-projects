@@ -63,7 +63,16 @@ int main(int argc, char** argv) {
   std::cout << "  filter_block: offset=" << footer.filter_handle.offset
              << " size=" << footer.filter_handle.size;
   if (footer.filter_handle.size == 0) {
-    std::cout << " (absent -- reserved for Phase 5's Bloom filter)";
+    std::cout << " (absent -- filter disabled for this table, or a pre-Phase-5 file)";
+  } else if (footer.filter_handle.size > pebbledb::sstable::kBlockTrailerSize + 1) {
+    // content = block bytes minus the trailer (kBlockTrailerSize); the
+    // content's first byte is num_probes, the rest is the bit array --
+    // see bloom/bloom_filter.hpp.
+    const std::uint64_t content_size =
+        footer.filter_handle.size - pebbledb::sstable::kBlockTrailerSize;
+    std::cout << " (Bloom filter, " << (content_size - 1) * 8 << " bits)";
+  } else {
+    std::cout << " (malformed -- too small to be a valid filter block)";
   }
   std::cout << "\n";
   std::cout << "  data_blocks: " << reader->index_entry_count() << "\n";
