@@ -38,8 +38,27 @@ from flashlite.timing import GpuTimer
 # ADR 0007: kAttnTileDim, mirrored here because it is a C++ constexpr
 # inside the compiled _cuda_tiled extension, not a Python-readable value
 # (ADR 0008 explains why this benchmark driver hard-codes it rather than
-# importing it).
+# importing it). ADR 0009: "online_softmax" reuses the same constant for
+# kernel 1/3 (unchanged from "tiled"). ADR 0011: "fused" has its own
+# kFusedTileDim, currently also 32.
 TILE_SIZE_V2 = 32
+TILE_SIZE_V3 = 32
+TILE_SIZE_V4 = 32
+
+VARIANT_TO_SCHEMA_NAME = {
+    "reference": "v0_reference",
+    "naive": "v1_naive",
+    "tiled": "v2_tiled",
+    "online_softmax": "v3_online_softmax",
+    "fused": "v4_fused",
+}
+VARIANT_TO_TILE_SIZE = {
+    "reference": 0,
+    "naive": 0,
+    "tiled": TILE_SIZE_V2,
+    "online_softmax": TILE_SIZE_V3,
+    "fused": TILE_SIZE_V4,
+}
 
 
 def _run_variant(variant: str, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, causal: bool) -> torch.Tensor:
@@ -53,10 +72,38 @@ def _run_variant(variant: str, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
         from flashlite import _cuda_tiled
 
         return _cuda_tiled.attention_tiled_forward(q, k, v, causal)
+    if variant == "online_softmax":
+        from flashlite import _cuda_online_softmax
+
+        return _cuda_online_softmax.attention_online_softmax_forward(q, k, v, causal)
+    if variant == "fused":
+        from flashlite import _cuda_fused
+
+        return _cuda_fused.attention_fused_forward(q, k, v, causal)
     raise ValueError(f"unknown variant: {variant!r}")
 
 
-def run_point(point: dict, seed: int, warmup_iters: int, measured_reps: int, env: EnvironmentInfo) -> BenchResult | None:
+def _measure_peak_memory_bytes(variant: str, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, causal: bool) -> float:
+    """ADR 0010: one additional, untimed forward call, deliberately kept
+    separate from the raw_timings_ms measurement loop below (repeated timed
+    calls may reuse already-allocated caching-allocator memory from earlier
+    reps, which would not reflect a single call's true peak).
+    """
+    torch.cuda.synchronize()
+    torch.cuda.reset_peak_memory_stats()
+    _run_variant(variant, q, k, v, causal)
+    torch.cuda.synchronize()
+    return float(torch.cuda.max_memory_allocated())
+
+
+def run_point(
+    point: dict,
+    seed: int,
+    warmup_iters: int,
+    measured_reps: int,
+    env: EnvironmentInfo,
+    measure_peak_memory: bool = False,
+) -> BenchResult | None:
     variant = point["variant"]
     batch, heads, seq_len, head_dim = point["batch"], point["heads"], point["seq_len"], point["head_dim"]
     causal = point["causal"]
@@ -73,6 +120,10 @@ def run_point(point: dict, seed: int, warmup_iters: int, measured_reps: int, env
               f"causal={causal}: {cmp_result.summary()}", file=sys.stderr)
         return None
 
+    peak_memory_bytes = 0.0
+    if measure_peak_memory:
+        peak_memory_bytes = _measure_peak_memory_bytes(variant, q, k, v, causal)
+
     timer = GpuTimer()
     for _ in range(warmup_iters):
         _run_variant(variant, q, k, v, causal)
@@ -88,7 +139,7 @@ def run_point(point: dict, seed: int, warmup_iters: int, measured_reps: int, env
     flops = 4.0 * batch * heads * seq_len * seq_len * head_dim  # QK^T + PV, 2 flops/MAC each
 
     result = BenchResult(
-        variant={"reference": "v0_reference", "naive": "v1_naive", "tiled": "v2_tiled"}[variant],
+        variant=VARIANT_TO_SCHEMA_NAME[variant],
         description=f"{variant} attention forward, B={batch} H={heads} S={seq_len} D={head_dim} causal={causal}",
         env=env,
         batch=batch, heads=heads, seq_len=seq_len, head_dim=head_dim, causal=causal,
@@ -100,7 +151,8 @@ def run_point(point: dict, seed: int, warmup_iters: int, measured_reps: int, env
         tolerance_atol=DEFAULT_ATOL, tolerance_rtol=DEFAULT_RTOL,
         correctness_passed=True,
         correctness_note=cmp_result.summary(),
-        tile_size=TILE_SIZE_V2 if variant == "tiled" else 0,  # ADR 0008
+        tile_size=VARIANT_TO_TILE_SIZE[variant],  # ADR 0008/0009/0011
+        peak_memory_bytes=peak_memory_bytes,  # ADR 0010
     )
     finalize(result)
     if result.stats and result.stats.median_ms > 0:
@@ -121,6 +173,8 @@ def main() -> int:
     config = json.loads(Path(args.config).read_text(encoding="utf-8"))
     env = EnvironmentInfo.capture()
 
+    measure_peak_memory = bool(config.get("measure_peak_memory", False))  # ADR 0010, opt-in per config
+
     emitted = 0
     for point in config["points"]:
         result = run_point(
@@ -129,14 +183,16 @@ def main() -> int:
             warmup_iters=config["warmup_iters"],
             measured_reps=config["measured_reps"],
             env=env,
+            measure_peak_memory=measure_peak_memory,
         )
         if result is None:
             continue
         append_jsonl(args.out, result)
         emitted += 1
+        peak_mb_note = f", peak={result.peak_memory_bytes / 1.0e6:.2f} MB" if result.peak_memory_bytes > 0 else ""
         print(f"  OK: {result.variant} B={result.batch} H={result.heads} S={result.seq_len} "
               f"D={result.head_dim} causal={result.causal} -> median={result.stats.median_ms:.4f} ms, "
-              f"{result.effective_bandwidth_gb_s:.2f} GB/s, {result.gflops:.2f} GFLOP/s")
+              f"{result.effective_bandwidth_gb_s:.2f} GB/s, {result.gflops:.2f} GFLOP/s{peak_mb_note}")
 
     print(f"run_benchmarks.py: emitted {emitted}/{len(config['points'])} points to {args.out}")
     return 0 if emitted == len(config["points"]) else 1

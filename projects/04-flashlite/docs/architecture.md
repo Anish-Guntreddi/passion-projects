@@ -1,4 +1,4 @@
-# Architecture (Phases 0-3)
+# Architecture (Phases 0-5)
 
 ## Data flow
 
@@ -8,30 +8,37 @@ tests / scripts/run_benchmarks.py / scripts/profile_kernels.py
         v
 flashlite.reference.tensors.make_qkv   (deterministic seeded Q, K, V)
         |
-        +----------------------+----------------------------+
-        |                      |                             |
-        v                      v                             v
-flashlite.reference    flashlite.ops.attention(variant=      flashlite.ops.attention(variant=
-  .attention                "naive")                            "tiled")
-  (V0: torch.matmul +        |                                  |
-   torch.softmax, CPU        v                                  v
-   or CUDA, the trusted  flashlite._cuda_naive           flashlite._cuda_tiled
-   ground truth every      .attention_naive_forward        .attention_tiled_forward
-   variant is checked       (V1: cuda_naive/bindings.cpp)   (V2: cuda_tiled/bindings.cpp)
-   against)                 |                                  |
+        +--------------+----------------+----------------------+----------------------+
+        |               |                |                       |                       |
+        v               v                v                       v                       v
+flashlite.reference  ops.attention(     ops.attention(         ops.attention(         ops.attention(
+  .attention          variant="naive")   variant="tiled")       variant=               variant="fused")
+  (V0: torch.matmul       |                  |                  "online_softmax")          |
+   + torch.softmax,       v                  v                       |                       v
+   CPU or CUDA, the  _cuda_naive       _cuda_tiled                   v                  _cuda_fused
+   trusted ground      .attention_       .attention_          _cuda_online_softmax    .attention_fused_
+   truth every          naive_forward     tiled_forward          .attention_online_     forward
+   variant is           (V1)              (V2)                    softmax_forward       (V4)
+   checked against)         |                  |                    (V3)                    |
         |          flashlite::validate_attention_inputs (cuda_common/shape_validate.hpp,
-        |            shared by V1 and V2 -- see "Shared vs. duplicated code" below)
-        |                   |                                  |
-        |         launch_attention_naive              launch_attention_tiled
-        |          (attention_naive.cu)                 (attention_tiled.cu)
-        |           1. compute_scores_kernel             1. compute_scores_tiled_kernel
-        |              -> scores[B,H,S,S]                   (shared-memory Q/K tiling)
-        |           2. softmax_rows_kernel                2. softmax_rows_kernel
-        |              -> scores in place                   (byte-for-byte = V1's)
-        |           3. weighted_sum_kernel                3. weighted_sum_tiled_kernel
-        |              -> out[B,H,S,D]                       (shared-memory P/V tiling)
-        |                   |                                  |
-        +-------------------+----------------------------------+
+        |            shared by V1-V4 -- see "Shared vs. duplicated code" below; V4 additionally
+        |            checks head_dim <= kMaxHeadDimFused in its own bindings.cpp, ADR 0011)
+        |                   |                  |                      |                      |
+        |         launch_attention_naive  launch_attention_tiled  launch_attention_    launch_attention_
+        |          (attention_naive.cu)    (attention_tiled.cu)    online_softmax        fused
+        |           1. compute_scores_     1. compute_scores_      (attention_online_    (attention_fused.cu)
+        |              kernel                 tiled_kernel          softmax.cu)           ONE kernel:
+        |              -> scores[B,H,S,S]     (shared-mem Q/K)     1. compute_scores_     streams K/V tiles,
+        |           2. softmax_rows_        2. softmax_rows_         tiled_kernel          online-softmax
+        |              kernel                  kernel                 (= V2's)             updates a running
+        |              -> scores in place      (byte-for-byte        2. online_softmax_    per-thread output
+        |           3. weighted_sum_            = V1's)                rows_kernel          accumulator --
+        |              kernel                3. weighted_sum_          (combined max+sum    NO scores buffer
+        |              -> out[B,H,S,D]          tiled_kernel            pass, ADR 0009)      anywhere (ADR 0011)
+        |                   |                     (shared-mem P/V)   3. weighted_sum_            |
+        |                   |                     |                     tiled_kernel               |
+        |                   |                     |                     (= V2's)                    |
+        +-------------------+---------------------+---------------------+----------------------------+
                           |
                           v
               flashlite.compare.allclose_compare
@@ -40,6 +47,8 @@ flashlite.reference    flashlite.ops.attention(variant=      flashlite.ops.atten
                           |
                           v
               flashlite.timing.GpuTimer (cudaEvent-based, kernel-only)
+           + torch.cuda.max_memory_allocated() (peak-memory measurement,
+             ADR 0010, opt-in per benchmark config, SS-below)
                           |
                           v
               flashlite.bench_schema.BenchResult + flashlite.env_capture
@@ -56,6 +65,17 @@ into the same `flashlite.ops.attention` dispatcher, meant to be wrapped by
 `docs/io-analysis.md` SS5.2 for what it captured and could not capture in
 this environment.
 
+`src/flashlite/online_softmax.py` (Phase 4) is a SEPARATE, CUDA-independent
+entry point, not part of the diagram above at all: it is the standalone
+"unit" spec SS1.4 requires be tested independently of any kernel
+(`tests/math/test_online_softmax.py`, no `flashlite.ops` or CUDA extension
+involved) -- `docs/online-softmax.md` derives the math it transcribes, and
+V3's kernel 2 / V4's single kernel each realize the identical combine
+identity at the CUDA level, documented in their own kernel comments rather
+than by importing this Python module (there is no Python-to-CUDA code
+sharing in this repo; see "Why a Python/pybind11 harness" below for the
+general reason CUDA and Python stay separate implementations here).
+
 This mirrors the spec's Part 2 architecture line ("Python benchmark/test
 harness -> reference attention -> custom extension/kernel dispatcher ->
 correctness comparator -> timing/memory profiler -> raw results/plots")
@@ -66,7 +86,7 @@ CMake+CUDA C++ harness to a PyTorch/pybind11 harness because D6's resolved
 default is the `torch.utils.cpp_extension` integration route (ADR 0005),
 not a from-scratch CMake+libtorch build.
 
-## Shared vs. duplicated code across variants (added Phase 3)
+## Shared vs. duplicated code across variants (added Phase 3, extended Phase 4/5)
 
 Two different kinds of "shared" code appear once a second kernel variant
 (V2) exists, and this repo treats them differently on purpose:
@@ -76,22 +96,32 @@ Two different kinds of "shared" code appear once a second kernel variant
   error-check macros) and `cuda_common/shape_validate.hpp` (the
   TORCH_CHECK shape/dtype/layout contract, identical for every variant per
   ADR 0002/0003/0004) moved out of `cuda_naive/` in Phase 3, when
-  `cuda_tiled/` needed the identical logic -- N copies of the same
-  validation block silently drifting apart (different wording, a forgotten
-  check) is a real risk sharing eliminates, and sharing it does not blur
-  what Phase 3 is actually demonstrating.
+  `cuda_tiled/` needed the identical logic; V3 and V4 reuse the same shared
+  header without further changes (V4 adds one variant-specific check --
+  `head_dim <= kMaxHeadDimFused` -- directly in its own `bindings.cpp`
+  rather than growing the shared validator with a check only one variant
+  needs, ADR 0011). N copies of the same validation block silently drifting
+  apart (different wording, a forgotten check) is a real risk sharing
+  eliminates, and sharing it does not blur what any phase is actually
+  demonstrating.
 - **The kernels themselves are deliberately NOT shared.** V1's three
-  kernels (`attention_naive.cu`) and V2's three kernels
-  (`attention_tiled.cu`) are two separate, complete files, even though
-  kernel 2 (`softmax_rows_kernel`) is byte-for-byte identical between them
-  ("conceptually simple softmax retained," roadmap Phase 3 -- see
-  `attention_tiled.cuh`'s header for why this one kernel is intentionally
-  duplicated, not extracted, even though it easily could be). This is the
-  spec's own instruction (Part 2: "Variants live side-by-side so Git
-  history and the benchmark report show the optimization ladder") applied
-  literally -- a reader should be able to open `attention_tiled.cu` alone
-  and see the complete V2 pipeline, including the one kernel that did not
-  change, without following an import into a shared module to find it.
+  kernels (`attention_naive.cu`), V2's three kernels (`attention_tiled.cu`),
+  and V3's three kernels (`attention_online_softmax.cu`) are three separate,
+  complete files, even though V2 and V3 share kernel 1
+  (`compute_scores_tiled_kernel`) and kernel 3 (`weighted_sum_tiled_kernel`)
+  byte-for-byte, and V1/V2 share kernel 2 (`softmax_rows_kernel`)
+  byte-for-byte (see `attention_tiled.cuh`'s and `attention_online_softmax.cuh`'s
+  headers for why each is intentionally duplicated, not extracted, even
+  though either easily could be). V4 (`attention_fused.cu`) is a single new
+  kernel, not a duplicate of anything -- it realizes the same online-softmax
+  combine identity V3's kernel 2 uses, but applied per-key-column directly
+  to freshly-computed scores instead of to an already-materialized row
+  (ADR 0011). This is the spec's own instruction (Part 2: "Variants live
+  side-by-side so Git history and the benchmark report show the
+  optimization ladder") applied literally -- a reader should be able to
+  open any one variant's `.cu` file alone and see that variant's complete
+  pipeline, including whichever kernels did not change from its
+  predecessor, without following an import into a shared module to find it.
 
 ## Package layout
 
@@ -104,11 +134,13 @@ src/flashlite/
   timing.py                  GpuTimer (torch.cuda.Event-based, kernel-only)
   env_capture.py             EnvironmentInfo (GPU, CUDA/torch versions, clocks)
   bench_schema.py            BenchResult dataclass + JSON (de)serialization
-  ops.py                     variant dispatcher ("reference" | "naive" | "tiled" | ...)
+  online_softmax.py          Phase 4: standalone online-softmax "unit" (docs/online-softmax.md),
+                               no CUDA dependency, tested independently before any kernel
+  ops.py                     variant dispatcher ("reference"|"naive"|"tiled"|"online_softmax"|"fused")
   cuda_common/               shared CUDA/C++ infrastructure (Phase 3), NOT part of the
                               "variants live side-by-side" ladder story -- see above
     error_check.cuh            CUDA error-check macros (throw, don't abort)
-    shape_validate.hpp          TORCH_CHECK shape/dtype/layout contract, shared by V1+V2
+    shape_validate.hpp          TORCH_CHECK shape/dtype/layout contract, shared by V1-V4
   cuda_naive/                V1: naive CUDA kernel + pybind11 bindings
     attention_naive.cuh        kernel/launcher declarations + shape contract
     attention_naive.cu         3-kernel naive pipeline (score/softmax/weighted-sum)
@@ -117,14 +149,26 @@ src/flashlite/
     attention_tiled.cuh        kernel/launcher declarations + tiling hypothesis (ADR 0007)
     attention_tiled.cu         3-kernel tiled pipeline (tiled score/softmax/tiled weighted-sum)
     bindings.cpp                calls cuda_common/shape_validate.hpp + pybind11 module
+  cuda_online_softmax/       V3 (Phase 4): kernel 1/3 = V2's, kernel 2 = combined-pass online softmax
+    attention_online_softmax.cuh  kernel/launcher declarations (ADR 0009's design rationale)
+    attention_online_softmax.cu   3-kernel pipeline (tiled score / ONLINE softmax / tiled weighted-sum)
+    bindings.cpp                   calls cuda_common/shape_validate.hpp + pybind11 module
+  cuda_fused/                V4 (Phase 5): single fused kernel, no [B,H,S,S] buffer at all
+    attention_fused.cuh        kernel/launcher declarations + design rationale (ADR 0011)
+    attention_fused.cu          ONE kernel: streams K/V tiles, per-thread online-softmax
+                                  output accumulator, no scores buffer
+    bindings.cpp                 calls cuda_common/shape_validate.hpp + its own head_dim<=128 check
 tests/
-  math/          Phase 0: reference correctness, RNG determinism, bench schema
-  correctness/   Phase 1: V1 vs V0; Phase 3: V2 vs V0 and vs V1 directly
-  edge_cases/    unsupported-shape rejection paths (V0, V1, and V2)
+  math/          Phase 0: reference correctness, RNG determinism, bench schema;
+                  Phase 4: tests/math/test_online_softmax.py (CPU-only, no CUDA)
+  correctness/   Phase 1: V1 vs V0; Phase 3: V2 vs V0/V1; Phase 4: V3 vs V0/V2;
+                  Phase 5: V4 vs V0/V3 + measured peak-memory scaling
+  edge_cases/    unsupported-shape rejection paths (V0-V4)
 benchmarks/
   schema/         bench_result.schema.json (JSON Schema, mirrors bench_schema.py)
   configs/        sweep specs (attention.json; Phase 2: memory_accounting.json;
-                                Phase 3: tiled_comparison.json)
+                                Phase 3: tiled_comparison.json;
+                                Phase 4/5: phase4_5_comparison.json)
   raw/            committed .jsonl results (one file per kernel family)
   methodology.md  how every number under raw/ was produced
 profiling/
@@ -132,10 +176,13 @@ profiling/
                    (docs/io-analysis.md SS5.2 for what they could/couldn't show)
 docs/
   attention-math.md    V0/V1 math derivation + materialized-form cost analysis
-  io-analysis.md       Phase 2/3: theoretical memory accounting, hypothesis, measured results
+  online-softmax.md    Phase 4: online-softmax derivation (docs/online-softmax.md, spec SS1.4)
+  io-analysis.md       Phase 2/3: theoretical memory accounting, hypothesis, measured results;
+                        SS9: Phase 4/5 addendum
   architecture.md      this file
   decisions/           ADRs for the spec's open decisions D1-D4, D6, D7, plus
-                        Phase 3 implementation ADRs 0007/0008
+                        Phase 3 implementation ADRs 0007/0008, Phase 4 ADR 0009,
+                        Phase 5 ADRs 0010/0011
                         (D5 itself is still deferred to Phase 6, per the spec)
 ```
 

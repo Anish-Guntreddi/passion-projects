@@ -408,3 +408,31 @@ combines both to avoid materializing the `[S, S]` matrix at all, which is
 the only way this project's arithmetic intensity can approach SS2's
 `AI_ideal = S/4` line and this GPU's `81.9 FLOP/byte` ridge point at
 realistic sequence lengths.
+
+## 9. Addendum: what Phases 4/5 actually found (written after both landed)
+
+`benchmarks/methodology.md` SS10 has the full writeup; this is the
+one-paragraph connection back to this document's own predictions, so a
+reader finishing this file does not have to guess whether SS8's roadmap
+panned out. **The memory-traffic story above is confirmed exactly as
+predicted**: `v3_online_softmax` (Phase 4) reduces kernel 2's traffic (two
+row passes instead of three) but, exactly as SS7 point 2's Amdahl's-law
+argument already anticipated for V2, this produces only a small (`~1-3%`
+at `seq_len >= 512`) end-to-end latency improvement over V2, since kernel 2
+was never the *only* non-negligible term. `v4_fused` (Phase 5) is where
+this section's central claim -- "the only way this project's arithmetic
+intensity can approach `AI_ideal`... is to avoid materializing `[S, S]` at
+all" -- gets tested directly: it measurably achieves close-to-linear
+peak-memory scaling (`~1.4-1.7x` per `seq_len` doubling, versus the
+materializing variants' `~2.2-3.5x` trending toward the `4x` quadratic
+signature), the literal removal this document's whole argument was
+building toward. **What SS8 did not predict, and this repo does not hide:**
+V4 is currently *slower* than V2/V3 at every tested shape (`benchmarks/methodology.md`
+SS10.3) -- a real, measured cost of the register-pressure/parallelism
+tradeoff its one-thread-per-query-row design makes (ADR 0011), not a
+correctness problem. Memory-traffic reduction and wall-clock speed are
+related but distinct axes; this project's premise (SS1: "attention
+performance is dominated by memory movement") is about *why* naive
+attention is slow at scale, not a guarantee that every memory-reducing
+rewrite is automatically also the fastest implementation on a given GPU
+without further tuning -- which is exactly what Phase 6 exists to pursue.

@@ -158,6 +158,31 @@ def test_tile_size_v2_tiled_record_validates() -> None:
     jsonschema.validate(instance=doc, schema=schema)
 
 
+def test_peak_memory_bytes_defaults_to_zero_and_validates() -> None:
+    """ADR 0010: peak_memory_bytes defaults to 0.0 ("not measured") for
+    records from sweeps that never measured it and must still validate --
+    the field is optional/additive, not required.
+    """
+    result = _make_result()
+    assert result.peak_memory_bytes == 0.0
+    finalize(result)
+    doc = to_json_dict(result)
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(instance=doc, schema=schema)
+
+
+def test_peak_memory_bytes_v4_fused_record_validates() -> None:
+    """ADR 0010: a v4_fused record with a populated peak_memory_bytes
+    (measured via torch.cuda.max_memory_allocated()) validates too.
+    """
+    result = _make_result(variant="v4_fused", peak_memory_bytes=12_582_912.0)
+    finalize(result)
+    doc = to_json_dict(result)
+    assert doc["peak_memory_bytes"] == 12_582_912.0
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    jsonschema.validate(instance=doc, schema=schema)
+
+
 def test_append_jsonl_appends_without_truncating(tmp_path: Path) -> None:
     path = tmp_path / "attention.jsonl"
     result = _make_result()

@@ -3,8 +3,10 @@ supported-shape contract per variant).' This file exercises every
 documented rejection path for V0 (flashlite.reference.attention, pure
 Python -- raises ValueError/NotImplementedError/TypeError), V1
 (flashlite._cuda_naive, pybind11 -- TORCH_CHECK raises RuntimeError with a
-specific message), and V2 (flashlite._cuda_tiled, same TORCH_CHECK contract
-via cuda_common/shape_validate.hpp), so a caller always gets a clear,
+specific message), V2 (flashlite._cuda_tiled, same TORCH_CHECK contract via
+cuda_common/shape_validate.hpp), V3 (flashlite._cuda_online_softmax, same
+shared contract), and V4 (flashlite._cuda_fused, same shared contract PLUS
+its own head_dim<=128 bound, ADR 0011), so a caller always gets a clear,
 specific exception instead of a segfault, a silent wrong answer, or an
 opaque CUDA error.
 """
@@ -166,3 +168,120 @@ def test_tiled_rejects_wrong_ndim() -> None:
     q, k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, device="cuda")
     with pytest.raises(RuntimeError, match="4-D"):
         _cuda_tiled.attention_tiled_forward(q[0], k, v, False)
+
+
+# --- V3 (flashlite._cuda_online_softmax.attention_online_softmax_forward) --
+# Same rejection paths as V1/V2, verified against V3 too since it routes
+# through the same shared cuda_common/shape_validate.hpp.
+
+try:
+    from flashlite import _cuda_online_softmax
+
+    CUDA_ONLINE_SOFTMAX_EXT_AVAILABLE = True
+except ImportError:
+    CUDA_ONLINE_SOFTMAX_EXT_AVAILABLE = False
+
+
+@gpu_test
+def test_online_softmax_rejects_cpu_tensors() -> None:
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=4, head_dim=8, seed=DEFAULT_SEED, device="cpu")
+    with pytest.raises(RuntimeError, match="CUDA tensors"):
+        _cuda_online_softmax.attention_online_softmax_forward(q, k, v, False)
+
+
+@gpu_test
+def test_online_softmax_rejects_non_contiguous_input() -> None:
+    q_big, k, v = make_qkv(batch=1, heads=1, seq_len=16, head_dim=8, seed=DEFAULT_SEED, device="cuda")
+    k, v = k[:, :, :8, :].contiguous(), v[:, :, :8, :].contiguous()
+    q_noncontig = q_big[:, :, ::2, :]
+    assert q_noncontig.shape == k.shape
+    assert not q_noncontig.is_contiguous()
+    with pytest.raises(RuntimeError, match="contiguous"):
+        _cuda_online_softmax.attention_online_softmax_forward(q_noncontig, k, v, False)
+
+
+@gpu_test
+def test_online_softmax_rejects_mismatched_shapes() -> None:
+    q, _k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, device="cuda")
+    k_wrong, _, _ = make_qkv(batch=1, heads=1, seq_len=9, head_dim=8, seed=DEFAULT_SEED + 1, device="cuda")
+    with pytest.raises(RuntimeError, match="must share one shape"):
+        _cuda_online_softmax.attention_online_softmax_forward(q, k_wrong, v, False)
+
+
+@gpu_test
+def test_online_softmax_rejects_float64() -> None:
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, dtype=torch.float64, device="cuda")
+    with pytest.raises(RuntimeError, match="float32"):
+        _cuda_online_softmax.attention_online_softmax_forward(q, k, v, False)
+
+
+@gpu_test
+def test_online_softmax_rejects_wrong_ndim() -> None:
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, device="cuda")
+    with pytest.raises(RuntimeError, match="4-D"):
+        _cuda_online_softmax.attention_online_softmax_forward(q[0], k, v, False)
+
+
+# --- V4 (flashlite._cuda_fused.attention_fused_forward) --------------------
+# Same shared rejection paths as V1/V2/V3, PLUS one V4-specific bound
+# (head_dim <= kMaxHeadDimFused, ADR 0011).
+
+try:
+    from flashlite import _cuda_fused
+
+    CUDA_FUSED_EXT_AVAILABLE = True
+except ImportError:
+    CUDA_FUSED_EXT_AVAILABLE = False
+
+
+@gpu_test
+def test_fused_rejects_cpu_tensors() -> None:
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=4, head_dim=8, seed=DEFAULT_SEED, device="cpu")
+    with pytest.raises(RuntimeError, match="CUDA tensors"):
+        _cuda_fused.attention_fused_forward(q, k, v, False)
+
+
+@gpu_test
+def test_fused_rejects_non_contiguous_input() -> None:
+    q_big, k, v = make_qkv(batch=1, heads=1, seq_len=16, head_dim=8, seed=DEFAULT_SEED, device="cuda")
+    k, v = k[:, :, :8, :].contiguous(), v[:, :, :8, :].contiguous()
+    q_noncontig = q_big[:, :, ::2, :]
+    assert q_noncontig.shape == k.shape
+    assert not q_noncontig.is_contiguous()
+    with pytest.raises(RuntimeError, match="contiguous"):
+        _cuda_fused.attention_fused_forward(q_noncontig, k, v, False)
+
+
+@gpu_test
+def test_fused_rejects_mismatched_shapes() -> None:
+    q, _k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, device="cuda")
+    k_wrong, _, _ = make_qkv(batch=1, heads=1, seq_len=9, head_dim=8, seed=DEFAULT_SEED + 1, device="cuda")
+    with pytest.raises(RuntimeError, match="must share one shape"):
+        _cuda_fused.attention_fused_forward(q, k_wrong, v, False)
+
+
+@gpu_test
+def test_fused_rejects_float64() -> None:
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, dtype=torch.float64, device="cuda")
+    with pytest.raises(RuntimeError, match="float32"):
+        _cuda_fused.attention_fused_forward(q, k, v, False)
+
+
+@gpu_test
+def test_fused_rejects_wrong_ndim() -> None:
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=8, seed=DEFAULT_SEED, device="cuda")
+    with pytest.raises(RuntimeError, match="4-D"):
+        _cuda_fused.attention_fused_forward(q[0], k, v, False)
+
+
+@gpu_test
+def test_fused_rejects_head_dim_above_max() -> None:
+    """V4-specific bound (attention_fused.cuh's kMaxHeadDimFused=128,
+    ADR 0011) -- not shared by V1/V2/V3, which accept any positive
+    head_dim; this must fail clearly (a specific TORCH_CHECK message
+    naming ADR 0011), not silently corrupt memory via an out-of-bounds
+    fixed-size register array write.
+    """
+    q, k, v = make_qkv(batch=1, heads=1, seq_len=8, head_dim=256, seed=DEFAULT_SEED, device="cuda")
+    with pytest.raises(RuntimeError, match="kMaxHeadDimFused"):
+        _cuda_fused.attention_fused_forward(q, k, v, False)

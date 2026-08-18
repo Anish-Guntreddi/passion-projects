@@ -19,6 +19,8 @@ from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 # relative to the setup.py directory").
 CUDA_NAIVE_DIR = os.path.join("src", "flashlite", "cuda_naive")
 CUDA_TILED_DIR = os.path.join("src", "flashlite", "cuda_tiled")
+CUDA_ONLINE_SOFTMAX_DIR = os.path.join("src", "flashlite", "cuda_online_softmax")
+CUDA_FUSED_DIR = os.path.join("src", "flashlite", "cuda_fused")
 
 # Pinned to sm_89 (RTX 4090), matching KernelForge's ADR 0001
 # (../02-kernelforge/docs/decisions/0001-target-gpu-architecture.md) -- the
@@ -55,6 +57,33 @@ setup(
             sources=[
                 os.path.join(CUDA_TILED_DIR, "bindings.cpp"),
                 os.path.join(CUDA_TILED_DIR, "attention_tiled.cu"),
+            ],
+            extra_compile_args={
+                "cxx": ["-O3", "-std=c++17"],
+                "nvcc": ["-O3", "--expt-relaxed-constexpr", "-lineinfo"],
+            },
+        ),
+        # V3 (Phase 4): online-softmax row normalization (docs/online-softmax.md),
+        # kernel 1/3 unchanged from V2. Separate extension module, same
+        # "variants live side-by-side" convention as V1/V2 above.
+        CUDAExtension(
+            name="flashlite._cuda_online_softmax",
+            sources=[
+                os.path.join(CUDA_ONLINE_SOFTMAX_DIR, "bindings.cpp"),
+                os.path.join(CUDA_ONLINE_SOFTMAX_DIR, "attention_online_softmax.cu"),
+            ],
+            extra_compile_args={
+                "cxx": ["-O3", "-std=c++17"],
+                "nvcc": ["-O3", "--expt-relaxed-constexpr", "-lineinfo"],
+            },
+        ),
+        # V4 (Phase 5): single fused kernel, no [B,H,S,S] scores buffer at
+        # all (attention_fused.cuh's header; ADR 0011).
+        CUDAExtension(
+            name="flashlite._cuda_fused",
+            sources=[
+                os.path.join(CUDA_FUSED_DIR, "bindings.cpp"),
+                os.path.join(CUDA_FUSED_DIR, "attention_fused.cu"),
             ],
             extra_compile_args={
                 "cxx": ["-O3", "-std=c++17"],

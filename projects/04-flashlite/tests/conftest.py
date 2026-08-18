@@ -3,14 +3,15 @@ specific, honest reason (no CUDA device present, vs. CUDA present but one
 of the compiled extensions hasn't been built yet) instead of letting it
 fail with an ImportError or a CUDA runtime error.
 
-Both compiled extensions (`_cuda_naive` V1, `_cuda_tiled` V2) are built
-together by one `scripts/build_ext.sh` run (setup.py lists both as
-ext_modules of the same `pip install -e .`), so in this repo's actual
-supported workflow they are always available together or missing
-together -- a single combined availability flag is accurate, not an
-approximation, and keeps every `gpu`-marked test (whichever extension it
-happens to exercise) skipping with the same clear reason in a fresh clone
-that hasn't run the build step yet.
+All four compiled extensions (`_cuda_naive` V1, `_cuda_tiled` V2,
+`_cuda_online_softmax` V3, `_cuda_fused` V4) are built together by one
+`scripts/build_ext.sh` run (setup.py lists all four as ext_modules of the
+same `pip install -e .`), so in this repo's actual supported workflow they
+are always available together or missing together -- a single combined
+availability flag is accurate, not an approximation, and keeps every
+`gpu`-marked test (whichever extension it happens to exercise) skipping
+with the same clear reason in a fresh clone that hasn't run the build step
+yet.
 """
 
 from __future__ import annotations
@@ -31,8 +32,20 @@ try:
 except ImportError:
     _MISSING_EXTENSIONS.append("flashlite._cuda_tiled")
 
+try:
+    from flashlite import _cuda_online_softmax  # noqa: F401
+except ImportError:
+    _MISSING_EXTENSIONS.append("flashlite._cuda_online_softmax")
+
+try:
+    from flashlite import _cuda_fused  # noqa: F401
+except ImportError:
+    _MISSING_EXTENSIONS.append("flashlite._cuda_fused")
+
 CUDA_NAIVE_EXT_AVAILABLE = "flashlite._cuda_naive" not in _MISSING_EXTENSIONS
 CUDA_TILED_EXT_AVAILABLE = "flashlite._cuda_tiled" not in _MISSING_EXTENSIONS
+CUDA_ONLINE_SOFTMAX_EXT_AVAILABLE = "flashlite._cuda_online_softmax" not in _MISSING_EXTENSIONS
+CUDA_FUSED_EXT_AVAILABLE = "flashlite._cuda_fused" not in _MISSING_EXTENSIONS
 CUDA_EXTENSIONS_AVAILABLE = not _MISSING_EXTENSIONS
 
 

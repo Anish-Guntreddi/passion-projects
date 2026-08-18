@@ -86,6 +86,11 @@
       "minimum": 0,
       "description": "ADR 0008: kernel-launch tile dimension (kAttnTileDim, ADR 0007), populated only for variant=\"v2_tiled\" (32 as of Phase 3). 0 = not applicable (v0_reference, v1_naive have no tile-size concept). Optional/additive -- intentionally not in the required array, so every Phase 0/1 record committed before this field existed remains schema-valid unchanged."
     },
+    "peak_memory_bytes": {
+      "type": "number",
+      "minimum": 0,
+      "description": "ADR 0010: measured torch.cuda.max_memory_allocated() bytes for one untimed forward call, populated only by sweeps that request it (Phase 4/5 onward). 0.0 = not measured for this record. Optional/additive -- every record committed before this field existed remains schema-valid unchanged."
+    },
     "notes": { "type": "string" }
   }
 }

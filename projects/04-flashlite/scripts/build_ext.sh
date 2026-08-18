@@ -15,4 +15,9 @@ python -c "import torch; assert torch.cuda.is_available(), 'CUDA not available t
 # build-time CUDA-version check then fails against that mismatched
 # isolated-env torch even though the real environment is consistent.
 pip install --no-build-isolation -e ".[dev]"
-python -c "from flashlite import _cuda_naive; print('flashlite._cuda_naive imported OK:', _cuda_naive.__file__)"
+python -c "
+from flashlite import _cuda_naive, _cuda_tiled, _cuda_online_softmax, _cuda_fused
+for name, mod in [('_cuda_naive', _cuda_naive), ('_cuda_tiled', _cuda_tiled),
+                   ('_cuda_online_softmax', _cuda_online_softmax), ('_cuda_fused', _cuda_fused)]:
+    print(f'flashlite.{name} imported OK:', mod.__file__)
+"

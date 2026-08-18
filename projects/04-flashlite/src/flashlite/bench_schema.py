@@ -78,6 +78,16 @@ class BenchResult:
     # ADR 0011 uses for its own per-family-only fields.
     tile_size: int = 0
 
+    # Phase 5 / ADR 0010: measured peak CUDA allocator bytes for one
+    # forward call (torch.cuda.max_memory_allocated() around a single,
+    # untimed call, separate from the raw_timings_ms loop). 0.0 = "not
+    # measured for this record" (every Phase 0-3 record, and any sweep
+    # point that only requested latency). This is what makes Phase 5's
+    # "peak-memory scales as designed" exit criterion, and spec SS1.6's
+    # peak-memory-vs-sequence-length plot, computable from committed raw
+    # data rather than only from a test assertion.
+    peak_memory_bytes: float = 0.0
+
     notes: str = ""
 
 

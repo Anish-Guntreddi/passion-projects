@@ -43,7 +43,9 @@ from flashlite.reference.tensors import DEFAULT_SEED, make_qkv
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--variant", required=True, choices=["reference", "naive", "tiled"])
+    parser.add_argument(
+        "--variant", required=True, choices=["reference", "naive", "tiled", "online_softmax", "fused"]
+    )
     parser.add_argument("--batch", type=int, default=1)
     parser.add_argument("--heads", type=int, default=8)
     parser.add_argument("--seq-len", type=int, default=2048)

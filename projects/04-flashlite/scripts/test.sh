@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs the full FlashLite Phase 0-1 test suite + benchmark-schema
+# Runs the full FlashLite test suite (Phase 0-5) + benchmark-schema
 # validation. Must run inside WSL2 Ubuntu, inside a venv with the package
 # installed (scripts/build_ext.sh).
 set -euo pipefail
